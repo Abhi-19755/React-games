@@ -190,8 +190,147 @@ function Stage({ env }) {
         </>
       )}
 
+      {/* Desert Shrine: sandstone walls, palms, sun */}
+      {isDesert && (
+        <>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, -3]} receiveShadow>
+            <planeGeometry args={[40, 14]} />
+            <meshStandardMaterial color={isDesert ? '#5a4020' : '#7a5a2a'} roughness={0.95} />
+          </mesh>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, -3]} receiveShadow>
+            <planeGeometry args={[40, 0.04]} />
+            <meshBasicMaterial color={isDesert ? '#6a4a1a' : '#8a6a2a'} />
+          </mesh>
+          <mesh key="sun" position={[0, 6, -5]}>
+            <circleGeometry args={[1.7, 32]} />
+            <meshBasicMaterial color={isDesert ? '#ffcc66' : '#ffe0a0'} />
+          </mesh>
+          {[[-10, -6], [10, -6], [-10, 6], [10, 6]].map(([x, z]) => (
+            <group key={`palm${x}${z}`} position={[x, 0, z]}>
+              <mesh castShadow position={[0, 4, 0]}>
+                <cylinderGeometry args={[0.13, 0.18, 6.4, 8]} />
+                <meshStandardMaterial color="#6a4a2a" roughness={0.85} />
+              </mesh>
+              [[-1.6, 0], [1.6, 0]].map(([sx, sy]) => (
+                <mesh key={`leaf${sx}-${sy}`} rotation={[0, 0.6, 0]} position={[sx, sy, 0]}>
+                  <boxGeometry args={[1.4, 0.02, 0.22]} />
+                  <meshStandardMaterial color={isDesert ? '#7aa85a' : '#6a9a4a'} roughness={0.8} side={THREE.DoubleSide} />
+                </mesh>
+              ))
+            </group>
+          ))}
+          {Array.from({ length: 13 }, (_, i) => (
+            <mesh key={`sWall${i}`} position={[-9.6 + i * 1.6, 3.5, -3.6]} receiveShadow>
+              <boxGeometry args={[1.6, 8, 0.2]} />
+              <meshStandardMaterial color={isDesert ? '#6a4a20' : '#8a6a30'} roughness={0.95} />
+            </mesh>
+          ))}
+        </>
+      )}
+
+      {/* Sky Garden: floating platforms, cherry trees, clouds */}
+      {isSkyGarden && (
+        <>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, -3]} receiveShadow>
+            <planeGeometry args={[40, 14]} />
+            <meshStandardMaterial color="#4a5a7a" roughness={0.9} />
+          </mesh>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, -3]} receiveShadow>
+            <planeGeometry args={[40, 0.04]} />
+            <meshBasicMaterial color="#6a7a9a" />
+          </mesh>
+          {[-12, -4, 4, 12].map((x) => (
+            <group key={`sfp${x}`} position={[x, 0, -1.5]}>
+              <mesh castShadow position={[0, 0.15, 0]}>
+                <boxGeometry args={[3, 0.12, 1.4]} />
+                <meshStandardMaterial color="#8a7a6a" roughness={0.8} />
+              </mesh>
+              <mesh position={[0, -0.3, 0]} rotation={[0, 0, 0.4]}>
+                <boxGeometry args={[2.8, 0.12, 0.2]} />
+                <meshStandardMaterial color="#6a5a4a" roughness={0.8} />
+              </mesh>
+            </group>
+          ))}
+          {[[-8, 1.2], [8, 1.2]].map(([x, y]) => (
+            <group key={`scbl${x}`} position={[x, y, -3]}>
+              <mesh position={[0, 4, 0]} castShadow>
+                <cylinderGeometry args={[0.12, 0.15, 3.6, 8]} />
+                <meshStandardMaterial color="#5a4a3a" roughness={0.8} />
+              </mesh>
+              <mesh position={[0, 2.5, 0]}>
+                <sphereGeometry args={[1.3, 16, 12]} />
+                <meshStandardMaterial color="#ffc0d0" roughness={0.9} side={THREE.DoubleSide} />
+              </mesh>
+              <mesh position={[-0.7, 2.8, 0]}>
+                <sphereGeometry args={[0.6, 12, 10]} />
+                <meshStandardMaterial color="#ffa0c8" roughness={0.9} side={THREE.DoubleSide} />
+              </mesh>
+              <mesh position={[0.6, 3.2, 0.3]}>
+                <sphereGeometry args={[0.5, 12, 10]} />
+                <meshStandardMaterial color="#ff7ac0" roughness={0.9} side={THREE.DoubleSide} />
+              </mesh>
+            </group>
+          ))}
+        </>
+      )}
+
+      {/* Canyon Arena: rock walls, dust particles */}
+      {isCanyon && (
+        <>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, -3]} receiveShadow>
+            <planeGeometry args={[40, 14]} />
+            <meshStandardMaterial color="#2a1408" roughness={0.95} />
+          </mesh>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, -3]} receiveShadow>
+            <planeGeometry args={[40, 0.04]} />
+            <meshBasicMaterial color="#3a2010" />
+          </mesh>
+          {[[-12, 0], [0, -12], [12, 0]].map(([x, z]) => (
+            <group key={`cw${x}${z}`} position={[x, 0, z]}>
+              <mesh position={[0, 4, 0]} castShadow>
+                <boxGeometry args={[2.4, 8.4, 0.3]} />
+                <meshStandardMaterial color="#5a3a1a" roughness={0.95} />
+              </mesh>
+            </group>
+          ))}
+          {[[-7, 0], [7, 0]].map(([x, z]) => (
+            <mesh key={`crk${x}`} position={[x, 0.05, z]}>
+              <icosahedronGeometry args={[0.7, 0]} />
+              <meshStandardMaterial color="#6a3a1a" roughness={0.9} />
+            </mesh>
+          ))}
+          {particleSystem count={35} color="#c9a86c" yRange={[0.1, 3]} xRange={[-10, 10]} />
+        </>
+      )}
+
+      {/* Crystal Cave: glowing geode walls, sparking crystals */}
+      {isCrystal && (
+        <>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, -3]} receiveShadow>
+            <planeGeometry args={[40, 14]} />
+            <meshStandardMaterial color="#1a0a2a" roughness={0.6} metalness={0.15} />
+          </mesh>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, -3]} receiveShadow>
+            <planeGeometry args={[40, 0.04]} />
+            <meshStandardMaterial color="#2a1438" roughness={0.6} metalness={0.2} />
+          </mesh>
+          {[[-12, 0], [0, -12], [12, 0], [-12, 4], [12, 4], [-12, -4], [12, -4]].map(([x, z]) => (
+            <group key={`gc${x}${z}`} position={[x, 0, z]}>
+              [[-0.5, 0.8], [0.5, 0.8]].map(([sx, h]) => (
+                <mesh key={`csp${sx}`} position={[sx, h / 2, 0]} castShadow>
+                  <coneGeometry args={[0.12, h, 6]} />
+                  <meshStandardMaterial color={sx > 0 ? '#9a5ad8' : '#5a3a9a'} emissive={sx > 0 ? '#5a2ac0' : '#3a1a6a'} emissiveIntensity={0.7} roughness={0.4} />
+                </mesh>
+              ))
+            </group>
+          ))}
+          <pointLight position={[0, 2, -3]} intensity={0.7} distance={12} color="#9a6aff" />
+          {particleSystem count={45} color="#b89af0" yRange={[0.2, 6]} xRange={[-12, 12]} />
+        </>
+      )}
+
       {/* Default dojo elements (for non-specific environments) */}
-      {!isVolcano && !isForest && !isTemple && !isCourtyard && !isRooftop && (
+      {!isVolcano && !isForest && !isTemple && !isCourtyard && !isRooftop && !isDesert && !isSkyGarden && !isCanyon && !isCrystal && (
         <>
           {/* Sun behind the banner */}
           <mesh position={[0, 5, -3.45]}>

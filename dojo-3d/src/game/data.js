@@ -19,6 +19,8 @@ export const CHARS = [
   { name: 'Karate',    gi: '#ffffff', pants: '#ffffff', belt: '#111111', accent: '#d7141a', hair: 'spiky',   speed: 4.0, power: 1.00, desc: 'Balanced fighter, good at everything' },
   { name: 'Taekwondo', gi: '#ffffff', pants: '#ffffff', belt: '#111111', accent: '#d7141a', hair: 'bob',     speed: 5.0, power: 0.90, desc: 'Fast kicks, high mobility' },
   { name: 'Muay Thai', gi: '#ffffff', pants: '#ffffff', belt: '#d4a017', accent: '#d7141a', hair: 'topknot', speed: 3.5, power: 1.20, desc: 'Heavy hitter, slower but strong' },
+  { name: 'Aria',      gi: '#f4d8e8', pants: '#f4d8e8', belt: '#e74c3c', accent: '#c0392b', hair: 'ponytail',speed: 4.4, power: 0.95, desc: 'Swift dancer, quick dashes' },
+  { name: 'Kazuki',    gi: '#1a2a4a', pants: '#1a2a4a', belt: '#b8c8d8', accent: '#8a9ab8', hair: 'mohawk',  speed: 3.8, power: 1.15, desc: 'Silent lightning, heavy hits' },
 ];
 
 // reach/dmg/slow modify hand moves only. type controls how the weapon is drawn.
@@ -28,6 +30,7 @@ export const WEAPONS = [
   { name: 'Staff',    type: 'staff', len: 64, reach: 35, dmg: 1.20, slow: 3, desc: 'Long reach, slower' },
   { name: 'Nunchaku', type: 'nun',   len: 30, reach: 20, dmg: 1.30, slow: 4, desc: 'Heavy swings' },
   { name: 'Katana',   type: 'sword', len: 82, reach: 50, dmg: 1.45, slow: 6, desc: 'Longest reach, big damage' },
+  { name: 'Tonfa',    type: 'tonfa', len: 36, reach: 22, dmg: 1.28, slow: 3, desc: 'Triangular handle, three short prongs' },
 ];
 
 export const HAND_MOVES = new Set(['jab', 'hook', 'uppercut']);
@@ -58,6 +61,10 @@ export const ENVIRONMENTS = [
   { id: 'volcano', name: 'Volcanic Arena', desc: 'Lava flows and ash', bgColor: '#2a0a05', fogColor: '#3a1a0a' },
   { id: 'forest', name: 'Bamboo Forest', desc: 'Peaceful bamboo grove', bgColor: '#0a2a0a', fogColor: '#1a3a1a' },
   { id: 'rooftop', name: 'City Rooftop', desc: 'Neon-lit city at night', bgColor: '#0a0a2a', fogColor: '#1a1a3a' },
+  { id: 'desert', name: 'Desert Shrine', desc: 'Sandstone shrine under the sun', bgColor: '#3a2810', fogColor: '#5a4020' },
+  { id: 'skygarden', name: 'Sky Garden', desc: 'Floating islands and cherry blossoms', bgColor: '#5a6a8a', fogColor: '#7a8aaa' },
+  { id: 'canyon', name: 'Canyon Arena', desc: 'Rock walls and dusty canyon floor', bgColor: '#2a1208', fogColor: '#4a2810' },
+  { id: 'crystal', name: 'Crystal Cave', desc: 'Glowing geodes and sparking crystals', bgColor: '#1a0a2a', fogColor: '#2a1a3a' },
 ];
 
 // Special projectile configs

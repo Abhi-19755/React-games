@@ -102,7 +102,26 @@ export function createRig(char, weaponDef) {
   head.add(smile);
 
   // Hair by style
-  if (char.hair === 'spiky') {
+  if (char.hair === 'ponytail') {
+    head.add(mesh(new THREE.SphereGeometry(0.26, 24, 14, 0, Math.PI * 2, 0, Math.PI * 0.55), hair, 0, 0.02, -0.01));
+    const tail = mesh(new THREE.CylinderGeometry(0.085, 0.13, 0.58, 10), hair, -0.14, -0.32, -0.08);
+    tail.rotation.z = 0.7;
+    const tailHang = mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.18, 8), hair, -0.17, -0.58, -0.1);
+    tailHang.rotation.z = 0.8;
+    head.add(tail, tailHang);
+    const tailFeather = mesh(new THREE.BoxGeometry(0.1, 0.03, 0.22), hair, -0.15, -0.02, -0.22);
+    tailFeather.rotation.z = 1.0;
+    head.add(tailFeather);
+  } else if (char.hair === 'mohawk') {
+    head.add(mesh(new THREE.ConeGeometry(0.075, 0.46, 6), hair, 0, 0.4, 0));
+    const bandClear = mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.09, 28, 1, true), band, 0, 0.1, 0);
+    bandClear.material.side = THREE.DoubleSide;
+    head.add(bandClear);
+    const mhTail = mesh(new THREE.CylinderGeometry(0.03, 0.02, 0.34, 6), hair, 0.1, -0.1, 0);
+    mhTail.rotation.z = Math.PI / 2;
+    mhTail.position.x = 0.12;
+    head.add(mhTail);
+  } else if (char.hair === 'spiky') {
     head.add(mesh(new THREE.SphereGeometry(0.295, 24, 14, 0, Math.PI * 2, 0, Math.PI * 0.5), hair, 0, 0.03, -0.01));
     const spikes = [
       [-0.12, 0.27, 0.02, 0.45],
@@ -225,6 +244,20 @@ function buildWeapon(def, { wood, steel, gold }) {
     add(new THREE.CylinderGeometry(0.025, 0.025, 0.16, 8), wood, -0.08);
     add(new THREE.BoxGeometry(0.17, 0.03, 0.05), gold, -0.17);
     add(new THREE.BoxGeometry(0.035, L, 0.01), steel, -0.18 - L / 2);
+  } else if (def.type === 'tonfa') {
+    const body = mesh(new THREE.BoxGeometry(0.05, 0.24, 0.06), wood, 0, 0.02, 0);
+    body.rotation.z = 0.5;
+    g.add(body);
+    for (const px of [0.11, -0.11]) {
+      const prong = mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.18, 6), steel, px, 0, 0);
+      prong.rotation.z = 0.65;
+      g.add(prong);
+      const cap = mesh(new THREE.SphereGeometry(0.035, 8, 6), steel, px, 0.07, 0);
+      g.add(cap);
+    }
+    const core = mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.16, 6), wood, 0, -0.02, 0);
+    core.rotation.z = 0.3;
+    g.add(core);
   }
   return g;
 }
