@@ -47,6 +47,18 @@ const ATK = {
     windup: P({ torso: -0.15, hipY: -0.2, lSh: -2.0, lEl: -1.5, rSh: -2.0, rEl: -1.5 }),
     strike: P({ torso: 0.25, hipY: -0.25, lSh: -1.6, lEl: -0.1, rSh: -1.6, rEl: -0.1, rHip: -0.4, rKnee: 0.5 }),
   },
+  dash_strike: {
+    windup: P({ torso: -0.2, hipY: -0.12, rSh: 0.5, rEl: -2.4, lSh: -1.4, lEl: -1.0, rHip: -0.5, lHip: 0.4 }),
+    strike: P({ torso: 0.38, hipY: -0.08, rSh: -1.65, rEl: -0.05, lSh: 0.25, lEl: -1.8, rHip: -0.7, lHip: 0.5, rKnee: 0.2 }),
+  },
+  smash: {
+    windup: P({ torso: -0.3, hipY: 0.08, lSh: -2.3, rSh: -2.3, lEl: -0.4, rEl: -0.4, lHip: -0.2, rHip: 0.2 }),
+    strike: P({ torso: 0.55, hipY: -0.22, lSh: -0.6, rSh: -0.6, lEl: -0.2, rEl: -0.2, lKnee: 0.7, rKnee: 0.7, lHip: -0.4, rHip: -0.4 }),
+  },
+  dive_punch: {
+    windup: P({ torso: -0.25, hipY: 0.1, lSh: -1.2, rSh: -1.2, lEl: -1.5, rEl: -1.5, lHip: -0.8, rHip: -0.8, lKnee: 1.2, rKnee: 1.2 }),
+    strike: P({ torso: 0.5, hipY: -0.1, rSh: -2.5, rEl: -0.1, lSh: 0.3, lEl: -0.8, rHip: 0.4, lHip: -0.2, rKnee: 0.1, lKnee: 0.5 }),
+  },
 };
 
 export function walkPose(t) {

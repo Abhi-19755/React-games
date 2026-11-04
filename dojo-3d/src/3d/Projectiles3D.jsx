@@ -65,8 +65,44 @@ function makeSlot() {
   glow.position.y = -0.1;
   earth.add(glow);
 
-  group.add(blades, fire, water, lightning, earth);
-  return { group, blades, fire, water, lightning, earth, clock: 0 };
+  // Wind slash: a crescent gust blade
+  const wind = new THREE.Group();
+  const windMat = new THREE.MeshStandardMaterial({ color: '#88ddaa', emissive: '#44aa66', emissiveIntensity: 0.8, transparent: true, opacity: 0.75 });
+  const arc = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.08, 8, 20, Math.PI * 1.2), windMat);
+  arc.rotation.z = -Math.PI / 4;
+  wind.add(arc);
+  for (const oy of [-0.15, 0.15]) {
+    const streak = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.025, 0.02), new THREE.MeshBasicMaterial({ color: '#aaffcc', transparent: true, opacity: 0.5 }));
+    streak.position.set(-0.2, oy, 0);
+    wind.add(streak);
+  }
+
+  // Thunder clap: pulsing shockwave sphere with ring
+  const thunder = new THREE.Group();
+  const thunderCore = new THREE.Mesh(new THREE.SphereGeometry(0.28, 14, 10), new THREE.MeshStandardMaterial({ color: '#aaddff', emissive: '#6699cc', emissiveIntensity: 1.0, transparent: true, opacity: 0.8 }));
+  thunder.add(thunderCore);
+  const thunderRing = new THREE.Mesh(new THREE.TorusGeometry(0.45, 0.06, 8, 24), new THREE.MeshBasicMaterial({ color: '#ddeeff', transparent: true, opacity: 0.4 }));
+  thunderRing.rotation.x = Math.PI / 2;
+  thunder.add(thunderRing);
+  const thunderSpark = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
+  thunder.add(thunderSpark);
+
+  // Shadow strike: dark phantom silhouette dash
+  const shadow = new THREE.Group();
+  const shadowMat = new THREE.MeshStandardMaterial({ color: '#2a1040', emissive: '#6a2a8a', emissiveIntensity: 0.9, transparent: true, opacity: 0.7 });
+  const shadowCore = new THREE.Mesh(new THREE.SphereGeometry(0.25, 12, 10), shadowMat);
+  shadow.add(shadowCore);
+  for (const dx of [-0.3, -0.55]) {
+    const trail = new THREE.Mesh(new THREE.SphereGeometry(0.18 + dx * 0.1, 10, 8), new THREE.MeshBasicMaterial({ color: '#4a1a6a', transparent: true, opacity: 0.35 }));
+    trail.position.x = dx;
+    shadow.add(trail);
+  }
+  const shadowEdge = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), new THREE.MeshBasicMaterial({ color: '#cc66ff', transparent: true, opacity: 0.6 }));
+  shadowEdge.position.set(0.15, 0, 0);
+  shadow.add(shadowEdge);
+
+  group.add(blades, fire, water, lightning, earth, wind, thunder, shadow);
+  return { group, blades, fire, water, lightning, earth, wind, thunder, shadow, clock: 0 };
 }
 
 export default function Projectiles3D({ gsRef }) {
@@ -88,6 +124,9 @@ export default function Projectiles3D({ gsRef }) {
       s.water.visible = p.kind === 'water';
       s.lightning.visible = p.kind === 'lightning';
       s.earth.visible = p.kind === 'earth';
+      s.wind.visible = p.kind === 'wind';
+      s.thunder.visible = p.kind === 'thunder';
+      s.shadow.visible = p.kind === 'shadow';
 
       if (p.kind === 'blades') s.blades.rotation.z -= dt * 28;
       if (p.kind === 'fire') s.fire.scale.setScalar(1 + Math.sin(s.clock * 30) * 0.12);
@@ -99,6 +138,18 @@ export default function Projectiles3D({ gsRef }) {
       if (p.kind === 'earth') {
         s.earth.rotation.z += dt * 6;
         s.earth.scale.y = 1 + Math.sin(s.clock * 12) * 0.15;
+      }
+      if (p.kind === 'wind') {
+        s.wind.rotation.z += dt * 15;
+        s.wind.scale.setScalar(1 + Math.sin(s.clock * 18) * 0.1);
+      }
+      if (p.kind === 'thunder') {
+        s.thunder.scale.setScalar(1 + Math.sin(s.clock * 25) * 0.18);
+        s.thunder.rotation.y += dt * 8;
+      }
+      if (p.kind === 'shadow') {
+        s.shadow.scale.x = 1 + Math.sin(s.clock * 35) * 0.15;
+        s.shadow.children[0].rotation.y += dt * 12;
       }
     }
   });

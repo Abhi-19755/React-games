@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { createRig, setGlow } from './rig.js';
 import { IDLE, targetPose, attackPose, lerpPose, applyPose, POSES } from './poses.js';
-import { GROUND } from '../game/data.js';
+import { GROUND, SPECIAL_COST } from '../game/data.js';
 
 // Game coordinates (960 x 540, floor at y = GROUND) -> 3D world units
 export const toWorldX = (x) => (x - 480) / 100;
@@ -35,7 +35,7 @@ export default function Fighter3D({ getFighter, char, weapon }) {
       lerpPose(pose.current, targetPose(f, t), f.state === 'hit' ? 0.5 : 0.3);
     }
     applyPose(rig, pose.current, t);
-    setGlow(rig, f.flash || 0, f.meter >= 100, t);
+    setGlow(rig, f.flash || 0, f.meter >= SPECIAL_COST, t, f.critFlash || 0);
   });
 
   return <primitive object={rig.root} />;

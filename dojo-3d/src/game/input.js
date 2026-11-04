@@ -4,18 +4,26 @@ const down = new Set();     // keys currently held
 const pressed = new Set();  // keys pressed since the last endFrame()
 
 const GAME_CODES = new Set([
-  'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyJ', 'KeyK', 'KeyL', 'KeyU', 'KeyE', 'KeyQ',
+  'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyJ', 'KeyK', 'KeyL', 'KeyU', 'KeyI', 'KeyE', 'KeyQ',
   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
   'Numpad0', 'Numpad1', 'Numpad2', 'Numpad3', 'Numpad4', 'Numpad5', 'Numpad6', 'Numpad7',
   'Space', 'Enter',
 ]);
 
 window.addEventListener('keydown', (e) => {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+    return;
+  }
   if (GAME_CODES.has(e.code)) e.preventDefault();
   if (!e.repeat) pressed.add(e.code);
   down.add(e.code);
 });
-window.addEventListener('keyup', (e) => down.delete(e.code));
+window.addEventListener('keyup', (e) => {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+    return;
+  }
+  down.delete(e.code);
+});
 window.addEventListener('blur', () => down.clear());
 
 export const isPressed = (code) => pressed.has(code);
@@ -27,7 +35,8 @@ export function readInput(k) {
     up: pressed.has(k.up), down: down.has(k.down),
     block: down.has(k.block),
     jab: pressed.has(k.jab), kick: pressed.has(k.kick),
-    hook: pressed.has(k.hook), special: pressed.has(k.special),
+    hook: pressed.has(k.hook), heavy: pressed.has(k.heavy),
+    special: pressed.has(k.special) || down.has(k.special),
     roll: pressed.has(k.roll),
   };
 }

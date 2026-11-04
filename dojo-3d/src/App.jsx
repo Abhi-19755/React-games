@@ -3,6 +3,7 @@ import FightScreen from './FightScreen.jsx';
 import { FighterPreview, WeaponPreview } from './Previews.jsx';
 import { CHARS, WEAPONS, SPECIALS, ENVIRONMENTS } from './game/data.js';
 import { isPressed, endFrame } from './game/input.js';
+import { sfx, playMusic, MUSIC, entrySongFor } from './game/audio.js';
 
 const INIT = {
   screen: 'menu',        // menu | mode | room | select | weapon | special | env | fight | result
@@ -18,7 +19,6 @@ const INIT = {
 const MENU = {
   menu:   [{ label: 'Play', to: 'mode' }, { label: 'Character Selection', to: 'select', mode: 'single' }],
   mode:   [{ label: 'Single Player', to: 'select', mode: 'single' }, { label: 'Multiplayer', to: 'room', mode: 'multi' }, { label: 'Back', to: 'menu' }],
-  room:   [{ label: 'Continue', to: 'select' }, { label: 'Back', to: 'mode' }],
   result: [{ label: 'Rematch', fight: true }, { label: 'Main Menu', to: 'menu' }],
 };
 const BACK = { mode: 'menu', room: 'mode', result: 'menu' };
@@ -52,6 +52,12 @@ function activate(u, item) {
 // Keyboard handling for every screen except the fight. Returns the same
 // object when nothing changed, so React can skip the re-render.
 function keyStep(u) {
+  if (u.screen === 'room') {
+    if (document.activeElement && document.activeElement.tagName === 'INPUT') return u;
+    if (isPressed('Escape')) return { ...u, screen: 'mode', sel: 0 };
+    return u;
+  }
+
   if (MENU[u.screen]) {
     const items = MENU[u.screen], n = items.length;
     if (isPressed('KeyW') || isPressed('ArrowUp')) return { ...u, sel: (u.sel + n - 1) % n };
@@ -67,18 +73,19 @@ function keyStep(u) {
     if (!u.p1Lock) {
       if (isPressed('KeyA')) r = { ...r, p1Idx: (r.p1Idx + CHARS.length - 1) % CHARS.length };
       if (isPressed('KeyD')) r = { ...r, p1Idx: (r.p1Idx + 1) % CHARS.length };
-      if (isPressed('KeyJ')) r = { ...r, p1Lock: true };
+      if (isPressed('KeyJ')) r = { ...r, p1Lock: true, p1Special: CHARS[r.p1Idx].special };
     }
     if (multi && !u.p2Lock) {
       if (isPressed('ArrowLeft')) r = { ...r, p2Idx: (r.p2Idx + CHARS.length - 1) % CHARS.length };
       if (isPressed('ArrowRight')) r = { ...r, p2Idx: (r.p2Idx + 1) % CHARS.length };
-      if (isPressed('Numpad1')) r = { ...r, p2Lock: true };
+      if (isPressed('Numpad1')) r = { ...r, p2Lock: true, p2Special: CHARS[r.p2Idx].special };
     }
     if (isPressed('Escape')) return { ...u, screen: selectBack(u), sel: 0 };
     const ready = multi ? (r.p1Lock && r.p2Lock) : r.p1Lock;
     if (ready && (isPressed('Enter') || isPressed('Space'))) {
       return { ...r, screen: 'weapon', p1WLock: false, p2WLock: false, sel: 0 };
     }
+    return r;   // keep browsing changes (was lost before)
   }
 
   if (u.screen === 'weapon') {
@@ -99,6 +106,7 @@ function keyStep(u) {
     if (ready && (isPressed('Enter') || isPressed('Space'))) {
       return { ...r, screen: 'special', p1SpecialLock: false, p2SpecialLock: false, sel: 0 };
     }
+    return r;   // keep browsing and lock changes
   }
 
   if (u.screen === 'special') {
@@ -154,7 +162,14 @@ export default function App() {
       const u = uiRef.current;
       if (u.screen !== 'fight') {
         const next = keyStep(u);
-        if (next !== u) setUi(next);
+        if (next !== u) {
+          const locked = next.p1Lock !== u.p1Lock || next.p2Lock !== u.p2Lock || next.p1WLock !== u.p1WLock
+            || next.p2WLock !== u.p2WLock || next.p1SpecialLock !== u.p1SpecialLock || next.envLock !== u.envLock;
+          if (next.screen !== u.screen || locked) sfx('confirm');
+          else if (next.sel !== u.sel || next.p1Idx !== u.p1Idx || next.p2Idx !== u.p2Idx || next.p1W !== u.p1W
+            || next.p2W !== u.p2W || next.p1Special !== u.p1Special || next.p2Special !== u.p2Special || next.env !== u.env) sfx('select');
+          setUi(next);
+        }
         endFrame();
       }
       raf = requestAnimationFrame(tick);
@@ -162,6 +177,13 @@ export default function App() {
     raf = requestAnimationFrame(tick);
     return () => { alive = false; cancelAnimationFrame(raf); };
   }, []);
+
+  // Menu music. On the select screen, the highlighted fighter's entry song plays.
+  useEffect(() => {
+    if (ui.screen === 'fight') return;
+    if (ui.screen === 'select') playMusic(entrySongFor(CHARS[ui.p1Idx].name));
+    else playMusic(MUSIC.menu);
+  }, [ui.screen, ui.p1Idx]);
 
   const u = ui;
 
@@ -183,8 +205,8 @@ export default function App() {
         u={u}
         ready={u.mode === 'multi' ? (u.p1Lock && u.p2Lock) : u.p1Lock}
         onPick={(i) => setUi((s) => {
-          if (!s.p1Lock) return { ...s, p1Idx: i, p1Lock: true };
-          if (s.mode === 'multi' && !s.p2Lock) return { ...s, p2Idx: i, p2Lock: true };
+          if (!s.p1Lock) return { ...s, p1Idx: i, p1Lock: true, p1Special: CHARS[i].special };
+          if (s.mode === 'multi' && !s.p2Lock) return { ...s, p2Idx: i, p2Lock: true, p2Special: CHARS[i].special };
           return s;
         })}
         onBack={() => setUi((s) => ({ ...s, screen: selectBack(s), sel: 0 }))}
@@ -222,6 +244,24 @@ export default function App() {
         })}
         onBack={() => setUi((s) => ({ ...s, screen: 'weapon', sel: 0 }))}
         onNext={() => setUi((s) => ({ ...s, screen: 'env', envLock: false, sel: 0 }))}
+      />
+    );
+  }
+
+  if (u.screen === 'room') {
+    return (
+      <RoomScreen
+        u={u}
+        onBack={() => setUi((s) => ({ ...s, screen: 'mode', sel: 0 }))}
+        onJoin={(code) => setUi((s) => ({
+          ...s,
+          screen: 'select',
+          mode: 'multi',
+          roomCode: code,
+          p1Lock: false,
+          p2Lock: false,
+          sel: 0,
+        }))}
       />
     );
   }
@@ -284,18 +324,6 @@ function MenuScreen({ u, setUi }) {
     return (
       <div className="screen">
         <h2 className="heading">CHOOSE MODE</h2>
-        {buttons}
-      </div>
-    );
-  }
-
-  if (u.screen === 'room') {
-    return (
-      <div className="screen">
-        <h2 className="heading">MULTIPLAYER ROOM</h2>
-        <div className="room-code">{u.roomCode.split('').join(' ')}</div>
-        <p>Share this code with your opponent.</p>
-        <p className="note">Online matchmaking is not connected in this build, so both players use this keyboard.</p>
         {buttons}
       </div>
     );
@@ -443,6 +471,91 @@ function EnvSelect({ u, ready, onPick, onBack, onStart }) {
         <button className="btn" onClick={onBack}>Back</button>
         {ready && <button className="btn primary" onClick={onStart}>Start Fight</button>}
       </div>
+    </div>
+  );
+}
+
+function RoomScreen({ u, onBack, onJoin }) {
+  const [code, setCode] = useState(u.roomCode || '');
+  const [tab, setTab] = useState('join');
+  const [createdCode, setCreatedCode] = useState(u.roomCode || randomRoom());
+
+  const handleJoin = (e) => {
+    if (e) e.preventDefault();
+    const finalCode = (tab === 'join' ? code : createdCode).trim().toUpperCase();
+    if (!finalCode) return;
+    sfx('confirm');
+    onJoin(finalCode);
+  };
+
+  const handleGenerate = () => {
+    const fresh = randomRoom();
+    setCreatedCode(fresh);
+    sfx('select');
+  };
+
+  return (
+    <div className="screen">
+      <h2 className="heading">MULTIPLAYER ROOM</h2>
+
+      <div className="room-tabs">
+        <button
+          className={'room-tab' + (tab === 'join' ? ' active' : '')}
+          onClick={() => { setTab('join'); sfx('select'); }}
+        >
+          Enter Code
+        </button>
+        <button
+          className={'room-tab' + (tab === 'create' ? ' active' : '')}
+          onClick={() => { setTab('create'); sfx('select'); }}
+        >
+          Create Room
+        </button>
+      </div>
+
+      <div className="room-box">
+        {tab === 'join' ? (
+          <form onSubmit={handleJoin} className="room-form">
+            <p className="sub">ENTER ROOM CODE TO JOIN</p>
+            <input
+              type="text"
+              className="room-input"
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 6))}
+              placeholder="CODE"
+              autoFocus
+              maxLength={6}
+            />
+            <p className="note">Type the room code from your opponent to connect.</p>
+            <div className="btn-col" style={{ marginTop: '6px' }}>
+              <button
+                type="submit"
+                className="btn primary"
+                disabled={!code.trim()}
+              >
+                Join Match ({code.trim() || '....'})
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="room-form">
+            <p className="sub">SHARE THIS ROOM CODE</p>
+            <div className="room-code">{createdCode.split('').join(' ')}</div>
+            <button className="btn" onClick={handleGenerate} style={{ fontSize: '16px', padding: '8px 16px' }}>
+              🎲 Generate New Code
+            </button>
+            <div className="btn-col" style={{ marginTop: '6px' }}>
+              <button className="btn primary" onClick={handleJoin}>
+                Continue with Code
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <button className="btn" onClick={onBack} style={{ marginTop: '8px' }}>
+        Back
+      </button>
     </div>
   );
 }

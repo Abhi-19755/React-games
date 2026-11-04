@@ -41,9 +41,12 @@ export function createRig(char, weaponDef) {
   const mouth = new THREE.MeshBasicMaterial({ color: '#7a2a2a' });
   const white = new THREE.MeshBasicMaterial({ color: '#ffffff' });
 
+  // Body scale multiplier for wider characters (e.g. Sumo)
+  const bs = char.bodyScale || 1.0;
+
   const root = new THREE.Group();
   const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(0.42, 28),
+    new THREE.CircleGeometry(0.42 * bs, 28),
     new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.28, depthWrite: false })
   );
   shadow.rotation.x = -Math.PI / 2;
@@ -54,12 +57,13 @@ export function createRig(char, weaponDef) {
   const hips = new THREE.Group();
   hips.position.y = HIP;
   root.add(hips);
-  hips.add(mesh(new THREE.BoxGeometry(0.3, 0.12, 0.22), pants, 0, 0.02, 0));
+  const hipBox = mesh(new THREE.BoxGeometry(0.3 * bs, 0.12, 0.22 * bs), pants, 0, 0.02, 0);
+  hips.add(hipBox);
 
   // Torso leans from the hips
   const torso = new THREE.Group();
   hips.add(torso);
-  const body = mesh(new THREE.CylinderGeometry(0.2, 0.16, 0.34, 18), gi, 0, 0.2, 0);
+  const body = mesh(new THREE.CylinderGeometry(0.2 * bs, 0.16 * bs, 0.34, 18), gi, 0, 0.2, 0);
   body.scale.z = 0.72;
   torso.add(body);
 
@@ -72,7 +76,7 @@ export function createRig(char, weaponDef) {
   torso.add(lapelL, lapelR);
 
   // Black (or colored) belt with a knot at the front
-  torso.add(mesh(new THREE.BoxGeometry(0.36, 0.07, 0.25), belt, 0, 0.05, 0));
+  torso.add(mesh(new THREE.BoxGeometry(0.36 * bs, 0.07, 0.25 * bs), belt, 0, 0.05, 0));
   const knotA = mesh(new THREE.BoxGeometry(0.07, 0.22, 0.03), belt, -0.03, -0.06, 0.14);
   knotA.rotation.z = 0.5;
   const knotB = mesh(new THREE.BoxGeometry(0.07, 0.22, 0.03), belt, 0.04, -0.07, 0.14);
@@ -141,6 +145,9 @@ export function createRig(char, weaponDef) {
   } else if (char.hair === 'topknot') {
     head.add(mesh(new THREE.SphereGeometry(0.295, 24, 14, 0, Math.PI * 2, 0, Math.PI * 0.5), hair, 0, 0.03, -0.01));
     head.add(mesh(new THREE.SphereGeometry(0.1, 12, 10), hair, 0, 0.36, -0.04));
+  } else if (char.hair === 'buzzcut') {
+    // Short stubble: a thin hemisphere hugging the scalp
+    head.add(mesh(new THREE.SphereGeometry(0.29, 24, 14, 0, Math.PI * 2, 0, Math.PI * 0.48), hair, 0, 0.02, -0.01));
   }
 
   // Red headband with two tails trailing off the back
@@ -172,23 +179,23 @@ export function createRig(char, weaponDef) {
     return { shoulder, elbow, hand };
   }
 
-  // Legs: white pants, bare feet
+  // Legs: pants, bare feet
   function leg(side) {
     const hip = new THREE.Group();
-    hip.position.set(side * 0.1, 0, 0);
+    hip.position.set(side * 0.1 * bs, 0, 0);
     hips.add(hip);
-    hip.add(mesh(new THREE.CylinderGeometry(0.085, 0.07, 0.22, 12), pants, 0, -0.11, 0));
+    hip.add(mesh(new THREE.CylinderGeometry(0.085 * bs, 0.07 * bs, 0.22, 12), pants, 0, -0.11, 0));
     const knee = new THREE.Group();
     knee.position.y = -0.22;
     hip.add(knee);
-    knee.add(mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.22, 12), pants, 0, -0.11, 0));
+    knee.add(mesh(new THREE.CylinderGeometry(0.07 * bs, 0.06 * bs, 0.22, 12), pants, 0, -0.11, 0));
     const ankle = new THREE.Group();
     ankle.position.y = -0.22;
     knee.add(ankle);
-    const foot = mesh(new THREE.SphereGeometry(0.085, 14, 10), skin, 0, -0.08, 0.05);
+    const foot = mesh(new THREE.SphereGeometry(0.085 * bs, 14, 10), skin, 0, -0.08, 0.05);
     foot.scale.set(0.9, 0.5, 1.5);
     ankle.add(foot);
-    return { hip, knee };
+    return { hip, knee, ankle };
   }
 
   const arms = { L: arm(-1), R: arm(1) };
@@ -197,12 +204,120 @@ export function createRig(char, weaponDef) {
   // Weapon hangs from the lead (right) hand
   if (weaponDef && weaponDef.type) arms.R.hand.add(buildWeapon(weaponDef, { wood, steel, gold }));
 
+  // ---- Accessories ----
+  const acc = new Set(char.accessories || []);
+
+  // Scarf: flowing cloth around neck
+  if (acc.has('scarf')) {
+    const scarfMat = mat(char.accent, 0.7);
+    const scarfWrap = mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.1, 14, 1, true), scarfMat, 0, 0.38, 0);
+    scarfWrap.material.side = THREE.DoubleSide;
+    torso.add(scarfWrap);
+    // Trailing tail of scarf
+    const scarfTail = mesh(new THREE.BoxGeometry(0.08, 0.28, 0.03), scarfMat, 0.14, 0.22, -0.16);
+    scarfTail.rotation.z = -0.4;
+    scarfTail.rotation.x = -0.3;
+    torso.add(scarfTail);
+    const scarfTip = mesh(new THREE.BoxGeometry(0.06, 0.18, 0.03), scarfMat, 0.18, 0.08, -0.2);
+    scarfTip.rotation.z = -0.6;
+    scarfTip.rotation.x = -0.4;
+    torso.add(scarfTip);
+  }
+
+  // Anklets: rings around ankles
+  if (acc.has('anklets')) {
+    const ankletMat = mat('#c0c0c0', 0.3, 0.8);
+    for (const side of [-1, 1]) {
+      const legJoint = legs[side === -1 ? 'L' : 'R'];
+      if (legJoint.ankle) {
+        const ring = mesh(new THREE.TorusGeometry(0.075, 0.018, 8, 16), ankletMat, 0, 0.02, 0.02);
+        ring.rotation.x = Math.PI / 2;
+        legJoint.ankle.add(ring);
+        const ring2 = mesh(new THREE.TorusGeometry(0.08, 0.015, 8, 16), ankletMat, 0, 0.06, 0.02);
+        ring2.rotation.x = Math.PI / 2;
+        legJoint.ankle.add(ring2);
+      }
+    }
+  }
+
+  // Dog tags: two small plates hanging from neck
+  if (acc.has('dogTags')) {
+    const tagMat = mat('#aaaaaa', 0.3, 0.9);
+    // Chain
+    const chain = mesh(new THREE.TorusGeometry(0.12, 0.008, 6, 20, Math.PI), tagMat, 0, 0.38, 0.14);
+    torso.add(chain);
+    // Two small tag plates
+    const tag1 = mesh(new THREE.BoxGeometry(0.04, 0.06, 0.008), tagMat, -0.02, 0.28, 0.16);
+    const tag2 = mesh(new THREE.BoxGeometry(0.04, 0.06, 0.008), tagMat, 0.03, 0.26, 0.16);
+    tag2.rotation.z = 0.15;
+    torso.add(tag1, tag2);
+  }
+
+  // Arm wraps: extra geometry on forearms
+  if (acc.has('armWraps')) {
+    const wrapMat = mat('#d2c4a0', 0.8);
+    for (const side of ['L', 'R']) {
+      const elbow = arms[side].elbow;
+      for (let i = 0; i < 3; i++) {
+        const wrap = mesh(new THREE.CylinderGeometry(0.066, 0.066, 0.025, 10, 1, true), wrapMat, 0, -0.04 - i * 0.05, 0);
+        wrap.material.side = THREE.DoubleSide;
+        elbow.add(wrap);
+      }
+    }
+  }
+
+  // Belly: bigger rounded torso for heavy characters
+  if (acc.has('belly')) {
+    const bellyMesh = mesh(new THREE.SphereGeometry(0.22, 16, 12), gi, 0, 0.14, 0.06);
+    bellyMesh.scale.set(1.1, 0.9, 0.85);
+    torso.add(bellyMesh);
+  }
+
+  // Thick legs: slightly wider leg cylinders added on top
+  if (acc.has('thickLegs')) {
+    for (const side of ['L', 'R']) {
+      const hipJoint = legs[side].hip;
+      const thigh = mesh(new THREE.CylinderGeometry(0.1, 0.09, 0.2, 12), pants, 0, -0.1, 0);
+      hipJoint.add(thigh);
+    }
+  }
+
+  // Mask: covers lower face
+  if (acc.has('mask')) {
+    const maskMat = mat(char.gi, 0.7);
+    const maskMesh = mesh(new THREE.SphereGeometry(0.26, 20, 12, 0, Math.PI * 2, Math.PI * 0.45, Math.PI * 0.35), maskMat, 0, 0, 0);
+    head.add(maskMesh);
+  }
+
+  // Hood: covers top/back of head over hair
+  if (acc.has('hood')) {
+    const hoodMat = mat(char.gi, 0.75);
+    const hoodMesh = mesh(new THREE.SphereGeometry(0.31, 22, 14, 0, Math.PI * 2, 0, Math.PI * 0.55), hoodMat, 0, 0.02, -0.03);
+    head.add(hoodMesh);
+  }
+
+  // Shoulder armor: small protective pads
+  if (acc.has('shoulderArmor')) {
+    const armorMat = mat('#3a3a3a', 0.4, 0.6);
+    for (const side of [-1, 1]) {
+      const pad = mesh(new THREE.BoxGeometry(0.14, 0.08, 0.16), armorMat, side * 0.28, 0.34, 0);
+      pad.rotation.z = side * 0.3;
+      torso.add(pad);
+      const rim = mesh(new THREE.BoxGeometry(0.16, 0.03, 0.18), armorMat, side * 0.3, 0.30, 0);
+      rim.rotation.z = side * 0.3;
+      torso.add(rim);
+    }
+  }
+
   return { root, hips, torso, head, arms, legs, mats };
 }
 
-// Glow: red when hit, gold pulse when the special bar is full
-export function setGlow(rig, flash, aura, t) {
-  if (flash > 0) {
+// Glow: brilliant gold on critical hit, red when hit, gold pulse when the special bar is full
+export function setGlow(rig, flash, aura, t, critFlash = 0) {
+  if (critFlash > 0) {
+    const k = critFlash / 16;
+    for (const m of rig.mats) m.emissive.setRGB(1.5 * k, 1.2 * k, 0.4 * k);
+  } else if (flash > 0) {
     const k = flash / 10;
     for (const m of rig.mats) m.emissive.setRGB(0.9 * k, 0.15 * k, 0.1 * k);
   } else if (aura) {

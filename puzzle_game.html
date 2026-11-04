@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Puzzle Quest 3D</title>
+<style>
+  body { margin: 0; overflow: hidden; background: #1b1830; font-family: system-ui, sans-serif; color: #fff; user-select: none; }
+  #hud { position: fixed; top: 12px; left: 12px; font-size: 18px; font-weight: bold; text-shadow: 0 2px 4px #000; pointer-events: none; }
+  #msg { position: fixed; bottom: 60px; width: 100%; text-align: center; font-size: 22px; font-weight: bold; text-shadow: 0 2px 4px #000; pointer-events: none; }
+  #controls { position: fixed; bottom: 12px; left: 12px; font-size: 13px; opacity: 0.7; pointer-events: none; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="hud"></div>
+<div id="msg"></div>
+<div id="controls">Arrows / WASD to move · Swipe on phone · R to restart · ENTER for next level</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ---------- LEVELS ----------
+// # wall   . floor   S start   k key   c crate
+// d locked door (needs a key)   p pressure plate
+// g gate (opens when every plate has a crate on it)   e exit
+const LEVELS = [
+  {
+    name: 'The Locked Door',
+    map: [
+      "#########",
+      "#S..k...#",
+      "#.#####.#",
+      "#.......#",
+      "#d#######",
+      "#e#######",
+    ],
+  },
+  {
+    name: 'Weight of the Gate',
+    map: [
+      "##########",
+      "#S.c.p...#",
+      "#.##...ge#",
+      "##########",
+    ],
+  },
+];
+
+// ---------- RENDERER / SCENE ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#1b1830');
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 100);
+scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+sun.position.set(5, 10, 6);
+scene.add(sun);
+
+const world = new THREE.Group();
+scene.add(world);
+
+const geo = {
+  box: new THREE.BoxGeometry(1, 1, 1),
+  sphere: new THREE.SphereGeometry(0.35, 24, 16),
+  key: new THREE.OctahedronGeometry(0.2),
+  plate: new THREE.CylinderGeometry(0.4, 0.4, 0.05, 24),
+};
+const mat = (color, emissive = '#000000') =>
+  new THREE.MeshStandardMaterial({ color, emissive, roughness: 0.6 });
+const mats = {
+  wall: mat('#5a4f8c'),
+  floor: mat('#3d3a5c'),
+  plate: mat('#ffd166', '#664400'),
+  door: mat('#ef476f'),
+  gate: mat('#118ab2'),
+  exit: mat('#06d6a0', '#03493d'),
+  crate: mat('#c8925a'),
+  key: mat('#ffd166', '#ffaa00'),
+};
+
+const playerMesh = new THREE.Mesh(geo.sphere, mat('#ff6b6b', '#330000'));
+scene.add(playerMesh);
+
+// ---------- STATE ----------
+let level = 0, W = 0, H = 0;
+let terrain = [], objs = {}, plates = [];
+let px = 0, py = 0, keysHeld = 0, moves = 0, won = false;
+let keyMeshes = [];
+
+const key = (x, y) => `${x},${y}`;
+const inside = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
+const gateOpen = () => plates.every(([x, y]) => objs[key(x, y)]?.type === 'crate');
+
+// ---------- UI ----------
+const hudEl = document.getElementById('hud');
+const msgEl = document.getElementById('msg');
+let flashTimer;
+function flash(text) {
+  msgEl.textContent = text;
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { if (!won) msgEl.textContent = ''; }, 1800);
+}
+function updateHud() {
+  hudEl.textContent = `Level ${level + 1}: ${LEVELS[level].name}  ·  Keys: ${keysHeld}  ·  Moves: ${moves}`;
+}
+
+// ---------- LOADING ----------
+function parse(map) {
+  H = map.length;
+  W = map[0].length;
+  terrain = [];
+  objs = {};
+  plates = [];
+  let start = { x: 1, y: 1 };
+  for (let y = 0; y < H; y++) {
+    terrain.push([]);
+    for (let x = 0; x < W; x++) {
+      const c = map[y][x];
+      let t = '.';
+      if (c === '#' || c === 'd' || c === 'g' || c === 'p' || c === 'e') t = c;
+      terrain[y].push(t);
+      if (c === 'S') start = { x, y };
+      if (c === 'c') objs[key(x, y)] = { type: 'crate' };
+      if (c === 'k') objs[key(x, y)] = { type: 'key' };
+      if (c === 'p') plates.push([x, y]);
+    }
+  }
+  return start;
+}
+
+function frameCamera() {
+  const cx = (W - 1) / 2, cz = (H - 1) / 2;
+  const d = Math.max(W, H) * (camera.aspect < 1 ? 1.6 : 1.0);
+  camera.position.set(cx, d * 0.9, cz + d * 0.75);
+  camera.lookAt(cx, 0, cz);
+}
+
+function loadLevel(i) {
+  level = i;
+  const start = parse(LEVELS[i].map);
+  px = start.x; py = start.y;
+  keysHeld = 0; moves = 0; won = false;
+  frameCamera();
+  drawWorld();
+  updateHud();
+  flash(`Level ${i + 1}: ${LEVELS[i].name}`);
+}
+
+// ---------- DRAWING ----------
+function addMesh(geometry, material, x, y, z, sx = 1, sy = 1, sz = 1) {
+  const m = new THREE.Mesh(geometry, material);
+  m.position.set(x, y, z);
+  m.scale.set(sx, sy, sz);
+  world.add(m);
+  return m;
+}
+
+function drawWorld() {
+  world.clear();
+  keyMeshes = [];
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const t = terrain[y][x];
+      if (t === '#') {
+        addMesh(geo.box, mats.wall, x, 0.5, y, 1, 1, 1);
+        continue;
+      }
+      addMesh(geo.box, mats.floor, x, -0.05, y, 1, 0.1, 1);
+      if (t === 'p') addMesh(geo.plate, mats.plate, x, 0.03, y);
+      if (t === 'd') addMesh(geo.box, mats.door, x, 0.6, y, 1, 1.2, 1);
+      if (t === 'g' && !gateOpen()) addMesh(geo.box, mats.gate, x, 0.6, y, 1, 1.2, 1);
+      if (t === 'e') addMesh(geo.box, mats.exit, x, 0.01, y, 0.9, 0.02, 0.9);
+    }
+  }
+  for (const k in objs) {
+    const [x, y] = k.split(',').map(Number);
+    const o = objs[k];
+    if (o.type === 'crate') addMesh(geo.box, mats.crate, x, 0.4, y, 0.8, 0.8, 0.8);
+    if (o.type === 'key') {
+      const m = addMesh(geo.key, mats.key, x, 0.5, y);
+      keyMeshes.push(m);
+    }
+  }
+  playerMesh.position.set(px, 0.4, py);
+}
+
+// ---------- MOVEMENT ----------
+function canPushInto(x, y) {
+  if (!inside(x, y)) return false;
+  const t = terrain[y][x];
+  if (t === '#' || t === 'd') return false;
+  if (t === 'g' && !gateOpen()) return false;
+  return !objs[key(x, y)];
+}
+
+function move(dx, dy) {
+  if (won) return;
+  const nx = px + dx, ny = py + dy;
+  if (!inside(nx, ny)) return;
+
+  let t = terrain[ny][nx];
+  if (t === '#') return;
+
+  if (t === 'd') {
+    if (keysHeld === 0) { flash('The door is locked. Find the key!'); return; }
+    keysHeld--;
+    terrain[ny][nx] = '.';
+    t = '.';
+    flash('Door unlocked!');
+  }
+
+  if (t === 'g' && !gateOpen()) { flash('The gate is sealed. Cover the plates!'); return; }
+
+  const o = objs[key(nx, ny)];
+  if (o && o.type === 'crate') {
+    const bx = nx + dx, by = ny + dy;
+    if (!canPushInto(bx, by)) return;
+    delete objs[key(nx, ny)];
+    objs[key(bx, by)] = { type: 'crate' };
+  }
+
+  px = nx; py = ny;
+  moves++;
+
+  const pick = objs[key(px, py)];
+  if (pick && pick.type === 'key') {
+    keysHeld++;
+    delete objs[key(px, py)];
+    flash('Found a key!');
+  }
+
+  if (terrain[py][px] === 'e') {
+    won = true;
+    flash(level + 1 < LEVELS.length
+      ? 'Level cleared! Press ENTER for the next level.'
+      : 'You beat the adventure! 🎉 Press R to replay.');
+  }
+
+  drawWorld();
+  updateHud();
+}
+
+// ---------- INPUT ----------
+const KEYMAP = {
+  arrowup: [0, -1], w: [0, -1],
+  arrowdown: [0, 1], s: [0, 1],
+  arrowleft: [-1, 0], a: [-1, 0],
+  arrowright: [1, 0], d: [1, 0],
+};
+addEventListener('keydown', (e) => {
+  const k = e.key.toLowerCase();
+  if (KEYMAP[k]) { e.preventDefault(); move(...KEYMAP[k]); }
+  else if (k === 'r') loadLevel(level);
+  else if (k === 'enter' && won && level + 1 < LEVELS.length) loadLevel(level + 1);
+});
+
+let touchX = 0, touchY = 0;
+addEventListener('touchstart', (e) => {
+  touchX = e.touches[0].clientX;
+  touchY = e.touches[0].clientY;
+}, { passive: true });
+addEventListener('touchend', (e) => {
+  const dx = e.changedTouches[0].clientX - touchX;
+  const dy = e.changedTouches[0].clientY - touchY;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < 30) return;
+  if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 1 : -1, 0);
+  else move(0, dy > 0 ? 1 : -1);
+});
+
+addEventListener('resize', () => {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  frameCamera();
+});
+
+// ---------- LOOP ----------
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+  playerMesh.position.x += (px - playerMesh.position.x) * 0.25;
+  playerMesh.position.z += (py - playerMesh.position.z) * 0.25;
+  playerMesh.position.y = 0.4 + Math.sin(t * 4) * 0.05;
+  keyMeshes.forEach((k) => { k.rotation.y = t * 2; });
+  renderer.render(scene, camera);
+}
+
+loadLevel(0);
+animate();
+</script>
+</body>
+</html>

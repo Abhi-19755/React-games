@@ -5,9 +5,11 @@ import Fighter3D, { toWorldX } from './Fighter3D.jsx';
 import Projectiles3D from './Projectiles3D.jsx';
 import { createMatch, stepMatch } from '../game/logic.js';
 import { isPressed, endFrame } from '../game/input.js';
+import { matchSounds, stopMusic } from '../game/audio.js';
 import { CHARS, WEAPONS, ENVIRONMENTS } from '../game/data.js';
 
 const END_DELAY_FRAMES = 120;
+
 
 // Scroll banner texture (武道)
 function makeBanner() {
@@ -96,9 +98,9 @@ function ParticleSystem({ count, color, yRange, xRange }) {
   );
 }
 
-// Small burst of sparks where a hit lands
+// Small burst of sparks where a hit lands, massive burst on critical
 function Sparks({ registerSpawn }) {
-  const MAX = 90;
+  const MAX = 140;
   const geo = useMemo(() => {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAX * 3).fill(-100), 3));
@@ -111,14 +113,16 @@ function Sparks({ registerSpawn }) {
   const next = useRef(0);
 
   useEffect(() => {
-    registerSpawn((origin) => {
-      for (let i = 0; i < 14; i++) {
+    registerSpawn((origin, isCrit = false) => {
+      const count = isCrit ? 36 : 14;
+      const speed = isCrit ? 1.8 : 1.0;
+      for (let i = 0; i < count; i++) {
         const k = next.current;
         next.current = (next.current + 1) % MAX;
         const s = parts[k];
         s.p.copy(origin);
-        s.v.set((Math.random() - 0.5) * 4, Math.random() * 3 + 1, (Math.random() - 0.5) * 2);
-        s.life = 0.45;
+        s.v.set((Math.random() - 0.5) * 5 * speed, (Math.random() * 4 + 1.2) * speed, (Math.random() - 0.5) * 3 * speed);
+        s.life = isCrit ? 0.65 : 0.45;
       }
     });
   }, [registerSpawn, parts]);
@@ -141,7 +145,7 @@ function Sparks({ registerSpawn }) {
 
   return (
     <points geometry={geo}>
-      <pointsMaterial color="#ffd27a" size={0.09} transparent />
+      <pointsMaterial color="#ffea70" size={0.11} transparent />
     </points>
   );
 }
@@ -207,6 +211,68 @@ function SpecialCastEffect({ gsRef }) {
               <torusGeometry args={[0.6, 0.15, 10, 32, Math.PI * 1.5]} />
               <meshBasicMaterial color="#4fc3f7" transparent opacity={e.life * 0.5} />
             </mesh>
+          )}
+          {e.kind === 'wind' && (
+            <>
+              <mesh scale={[e.scale * 1.3, e.scale, e.scale * 1.3]} rotation={[0, 0, e.clock * 12]}>
+                <torusGeometry args={[0.5, 0.08, 8, 24, Math.PI * 1.4]} />
+                <meshBasicMaterial color="#88ddaa" transparent opacity={e.life * 0.5} />
+              </mesh>
+              {[0, 1, 2].map((j) => (
+                <mesh key={j} scale={[e.scale, e.scale, e.scale]} rotation={[0, 0, e.clock * 8 + j * 2.1]}>
+                  <boxGeometry args={[0.7, 0.04, 0.02]} />
+                  <meshBasicMaterial color="#aaffcc" transparent opacity={e.life * 0.4} />
+                </mesh>
+              ))}
+            </>
+          )}
+          {e.kind === 'lightning' && (
+            <>
+              <mesh scale={[e.scale * 0.8, e.scale * 1.5, e.scale * 0.8]}>
+                <sphereGeometry args={[0.3, 12, 10]} />
+                <meshBasicMaterial color="#ffee44" transparent opacity={e.life * 0.6} />
+              </mesh>
+              <mesh scale={[e.scale * 0.5, e.scale * 0.5, e.scale * 0.5]}>
+                <sphereGeometry args={[0.2, 10, 8]} />
+                <meshBasicMaterial color="#ffffff" transparent opacity={e.life * 0.8} />
+              </mesh>
+            </>
+          )}
+          {e.kind === 'earth' && (
+            <>
+              <mesh scale={[e.scale, e.scale * 0.6, e.scale]} rotation={[0, e.clock * 5, 0]}>
+                <coneGeometry args={[0.4, 0.8, 6]} />
+                <meshBasicMaterial color="#c9a86c" transparent opacity={e.life * 0.5} />
+              </mesh>
+              <mesh scale={[e.scale * 1.2, e.scale * 0.3, e.scale * 1.2]}>
+                <sphereGeometry args={[0.5, 12, 8]} />
+                <meshBasicMaterial color="#8a6a3a" transparent opacity={e.life * 0.4} />
+              </mesh>
+            </>
+          )}
+          {e.kind === 'thunder' && (
+            <>
+              <mesh scale={[e.scale * 1.4, e.scale * 1.4, e.scale * 1.4]}>
+                <sphereGeometry args={[0.4, 14, 10]} />
+                <meshBasicMaterial color="#aaddff" transparent opacity={e.life * 0.4} />
+              </mesh>
+              <mesh scale={[e.scale * 1.8, e.scale * 0.3, e.scale * 1.8]} rotation={[-Math.PI / 2, 0, 0]}>
+                <torusGeometry args={[0.6, 0.1, 8, 24]} />
+                <meshBasicMaterial color="#ddeeff" transparent opacity={e.life * 0.35} />
+              </mesh>
+            </>
+          )}
+          {e.kind === 'shadow' && (
+            <>
+              <mesh scale={[e.scale, e.scale, e.scale]}>
+                <sphereGeometry args={[0.4, 14, 10]} />
+                <meshBasicMaterial color="#2a1040" transparent opacity={e.life * 0.5} />
+              </mesh>
+              <mesh scale={[e.scale * 0.6, e.scale * 0.6, e.scale * 0.6]}>
+                <sphereGeometry args={[0.3, 10, 8]} />
+                <meshBasicMaterial color="#cc66ff" transparent opacity={e.life * 0.7} />
+              </mesh>
+            </>
           )}
         </group>
       ))}
@@ -307,176 +373,12 @@ function TempleScene({ t }) {
   );
 }
 
-function CourtyardScene({ t }) {
-  return (
-    <>
-      <mesh position={[6, 8, -4]}>
-        <circleGeometry args={[1.5, 32]} />
-        <meshBasicMaterial color="#ffeedd" />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 3]}>
-        <circleGeometry args={[4, 24]} />
-        <meshBasicMaterial color="#1a2a4a" transparent opacity={0.3} />
-      </mesh>
-      <Lantern x={-3.6} color={t.lantern} />
-      <Lantern x={3.6} color={t.lantern} />
-    </>
-  );
-}
-
-function RooftopScene({ t }) {
-  return (
-    <>
-      {[-8, 8].map((x) => (
-        <group key={`neon${x}`} position={[x, 5, -4]}>
-          <mesh>
-            <boxGeometry args={[2, 1, 0.1]} />
-            <meshBasicMaterial color="#ff22aa" />
-          </mesh>
-          <mesh position={[0, -1.5, 0]}>
-            <boxGeometry args={[1.5, 0.8, 0.1]} />
-            <meshBasicMaterial color="#22aaff" />
-          </mesh>
-        </group>
-      ))}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 5]}>
-        <planeGeometry args={[30, 8]} />
-        <meshBasicMaterial color="#0a0a2a" transparent opacity={0.5} />
-      </mesh>
-      <Lantern x={-3.6} color={t.lantern} />
-      <Lantern x={3.6} color={t.lantern} />
-    </>
-  );
-}
-
-function Palm({ x, z }) {
-  return (
-    <group position={[x, 0, z]}>
-      <mesh castShadow position={[0, 3.2, 0]}>
-        <cylinderGeometry args={[0.13, 0.18, 6.4, 8]} />
-        <meshStandardMaterial color="#6a4a2a" roughness={0.85} />
-      </mesh>
-      {[-1.6, 1.6].map((sx) => (
-        <mesh key={`frond${sx}`} rotation={[0, 0.6, 0]} position={[sx, 6.4, 0]}>
-          <boxGeometry args={[1.4, 0.02, 0.22]} />
-          <meshStandardMaterial color="#7aa85a" roughness={0.8} side={THREE.DoubleSide} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function DesertScene({ t }) {
-  return (
-    <>
-      <mesh position={[0, 6, -5]}>
-        <circleGeometry args={[1.7, 32]} />
-        <meshBasicMaterial color="#ffcc66" />
-      </mesh>
-      {[[-10, -6], [10, -6], [-10, 6], [10, 6]].map(([x, z]) => (
-        <Palm key={`palm${x}${z}`} x={x} z={z} />
-      ))}
-    </>
-  );
-}
-
-function SkyGardenScene({ t }) {
-  return (
-    <>
-      {[-12, -4, 4, 12].map((x) => (
-        <group key={`plat${x}`} position={[x, 0, -1.5]}>
-          <mesh castShadow position={[0, 0.15, 0]}>
-            <boxGeometry args={[3, 0.12, 1.4]} />
-            <meshStandardMaterial color="#8a7a6a" roughness={0.8} />
-          </mesh>
-          <mesh position={[0, -0.3, 0]} rotation={[0, 0, 0.4]}>
-            <boxGeometry args={[2.8, 0.12, 0.2]} />
-            <meshStandardMaterial color="#6a5a4a" roughness={0.8} />
-          </mesh>
-        </group>
-      ))}
-      {[-8, 8].map((x) => (
-        <group key={`cherry${x}`} position={[x, 0, -3]}>
-          <mesh position={[0, 2, 0]} castShadow>
-            <cylinderGeometry args={[0.12, 0.15, 4, 8]} />
-            <meshStandardMaterial color="#5a4a3a" roughness={0.8} />
-          </mesh>
-          <mesh position={[0, 4.5, 0]}>
-            <sphereGeometry args={[1.3, 16, 12]} />
-            <meshStandardMaterial color={t.accent} roughness={0.9} />
-          </mesh>
-          <mesh position={[-0.7, 4.8, 0]}>
-            <sphereGeometry args={[0.6, 12, 10]} />
-            <meshStandardMaterial color="#ffa0c8" roughness={0.9} />
-          </mesh>
-          <mesh position={[0.6, 5.2, 0.3]}>
-            <sphereGeometry args={[0.5, 12, 10]} />
-            <meshStandardMaterial color="#ff7ac0" roughness={0.9} />
-          </mesh>
-        </group>
-      ))}
-      <ParticleSystem count={30} color="#ffc0d0" yRange={[0.5, 6]} xRange={[-12, 12]} />
-    </>
-  );
-}
-
-function CanyonScene({ t }) {
-  return (
-    <>
-      {[[-12, -3], [12, -3], [0, -6]].map(([x, z]) => (
-        <mesh key={`rock${x}${z}`} position={[x, 4, z]} castShadow>
-          <boxGeometry args={[2.4, 8.4, 0.3]} />
-          <meshStandardMaterial color={t.wall2} roughness={0.95} />
-        </mesh>
-      ))}
-      {[[-7, -1], [7, -1]].map(([x, z]) => (
-        <mesh key={`boulder${x}`} position={[x, 0.5, z]}>
-          <icosahedronGeometry args={[0.7, 0]} />
-          <meshStandardMaterial color={t.accent} roughness={0.9} />
-        </mesh>
-      ))}
-      <ParticleSystem count={35} color="#c9a86c" yRange={[0.1, 3]} xRange={[-10, 10]} />
-    </>
-  );
-}
-
-function Geode({ x, z }) {
-  return (
-    <group position={[x, 0, z]}>
-      {[-0.5, 0.5].map((sx) => (
-        <mesh key={`crys${sx}`} position={[sx, 0.4, 0]} castShadow>
-          <coneGeometry args={[0.12, 0.8, 6]} />
-          <meshStandardMaterial color={sx > 0 ? '#9a5ad8' : '#5a3a9a'}
-            emissive={sx > 0 ? '#5a2ac0' : '#3a1a6a'} emissiveIntensity={0.7} roughness={0.4} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function CrystalScene({ t }) {
-  return (
-    <>
-      {[[-12, -3], [12, -3], [-8, -6], [8, -6], [-12, 3], [12, 3]].map(([x, z]) => (
-        <Geode key={`geode${x}${z}`} x={x} z={z} />
-      ))}
-      <pointLight position={[0, 2, -3]} intensity={0.7} distance={12} color={t.lantern} />
-      <ParticleSystem count={45} color="#b89af0" yRange={[0.2, 6]} xRange={[-12, 12]} />
-    </>
-  );
-}
 
 const SCENES = {
   dojo: DojoScene,
   volcano: VolcanoScene,
   forest: ForestScene,
   temple: TempleScene,
-  courtyard: CourtyardScene,
-  rooftop: RooftopScene,
-  desert: DesertScene,
-  skygarden: SkyGardenScene,
-  canyon: CanyonScene,
-  crystal: CrystalScene,
 };
 
 // Floor, planks, back wall for every environment, then its scenery
@@ -510,6 +412,7 @@ function Stage({ env }) {
 // Runs the match each frame and drives the camera
 function GameLoop({ gsRef, spawnRef, onTick, onExit, onFinish }) {
   const camera = useThree((s) => s.camera);
+  const soundSnap = useRef(null);
 
   useFrame(() => {
     if (isPressed('Escape')) {
@@ -519,11 +422,23 @@ function GameLoop({ gsRef, spawnRef, onTick, onExit, onFinish }) {
     }
     const gs = gsRef.current;
     stepMatch(gs);
+    soundSnap.current = matchSounds(gs, soundSnap.current);
 
     const x1 = toWorldX(gs.p1.x), x2 = toWorldX(gs.p2.x), mid = (x1 + x2) / 2;
-    if (gs.p1.flash === 10 || gs.p2.flash === 10) spawnRef.current(new THREE.Vector3(mid, 1.1, 0));
+    const isCritHit = gs.p1.critFlash === 16 || gs.p2.critFlash === 16;
+    if (isCritHit || gs.p1.flash === 10 || gs.p2.flash === 10) {
+      spawnRef.current(new THREE.Vector3(mid, 1.1, 0), isCritHit);
+    }
 
-    camera.position.x += (mid * 0.35 - camera.position.x) * 0.05;
+    const targetX = mid * 0.35;
+    camera.position.x += (targetX - camera.position.x) * 0.05;
+    let camY = 2.1;
+    if (gs.shake > 0) {
+      const shakeAmt = (gs.shake / 14) * 0.18;
+      camera.position.x += (Math.random() - 0.5) * shakeAmt;
+      camY += (Math.random() - 0.5) * shakeAmt;
+    }
+    camera.position.y = camY;
     camera.lookAt(camera.position.x, 1.1, 0);
 
     onTick(gs);
@@ -540,13 +455,14 @@ export default function Arena3D({ config, onTick, onExit, onFinish }) {
   if (gsRef.current === null) gsRef.current = createMatch(config);
   const spawnRef = useRef(() => {});
   const registerSpawn = useRef((fn) => { spawnRef.current = fn; }).current;
+  useEffect(() => () => stopMusic(), []);
 
   const env = ENVIRONMENTS.find((e) => e.id === config.env) || ENVIRONMENTS[0];
 
   return (
     <Canvas shadows camera={{ position: [0, 2.1, 8.5], fov: 42 }}>
-      <color attach="background" args={[env.bgColor]} />
-      <fog attach="fog" args={[env.fogColor, 12, 26]} />
+      <color attach="background" args={[env.bgColor || '#0c0507']} />
+      <fog attach="fog" args={[env.fogColor || '#0c0507', 60, 300]} />
       <ambientLight intensity={0.45} />
       <directionalLight
         position={[4, 8, 6]}

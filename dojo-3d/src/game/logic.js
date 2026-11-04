@@ -1,35 +1,44 @@
-import { CHARS, WEAPONS, MOVES, HAND_MOVES, P1K, P2K, GROUND, W, SPECIAL_COST } from './data.js';
+import { CHARS, WEAPONS, MOVES, HAND_MOVES, P1K, P2K, GROUND, W, SPECIAL_COST, MAX_HP } from './data.js';
 import { readInput } from './input.js';
 
 const NO_WEAPON = WEAPONS[0];
 
-// Special projectiles: speed (px/frame), damage, lifetime, screen height, hit width
+// Special projectiles: speed (px/frame), damage (scaled for MAX_HP 250), lifetime, screen height, hit width
 export const PROJ = {
-  blades: { speed: 12,  dmg: 16, life: 70,  y: GROUND - 100, w: 40 },
-  fire:   { speed: 8,   dmg: 20, life: 100, y: GROUND - 70,  w: 36 },
-  water:  { speed: 6.5, dmg: 14, life: 130, y: GROUND - 40,  w: 70 },
+  blades:    { speed: 12,  dmg: 30, life: 70,  y: GROUND - 100, w: 40 },
+  fire:      { speed: 8,   dmg: 36, life: 100, y: GROUND - 70,  w: 36 },
+  water:     { speed: 6.5, dmg: 28, life: 130, y: GROUND - 40,  w: 70 },
+  wind:      { speed: 14,  dmg: 28, life: 60,  y: GROUND - 90,  w: 55 },
+  lightning: { speed: 18,  dmg: 34, life: 45,  y: GROUND - 110, w: 30 },
+  earth:     { speed: 5,   dmg: 38, life: 120, y: GROUND - 50,  w: 50 },
+  thunder:   { speed: 7,   dmg: 40, life: 90,  y: GROUND - 60,  w: 65 },
+  shadow:    { speed: 16,  dmg: 32, life: 55,  y: GROUND - 100, w: 35 },
 };
 
 export function makeFighter(char, x, facing, isAI, keys, label, weapon = NO_WEAPON) {
   return {
     char, label, isAI, keys, weapon,
-    kind: char.special,                 // which special power this fighter has
+    kind: char.special || 'blades',     // which special power this fighter has
     x, facing, y: GROUND, vx: 0, vy: 0,
-    hp: 100, meter: 0, state: 'idle', stun: 0,
+    hp: MAX_HP, maxHp: MAX_HP, meter: 0, state: 'idle', stun: 0,
     t: 0, total: 0, move: null, moveName: null, hitDone: false, cast: false,
     combo: 0, comboT: 0, aiCool: 0, aiBlock: 0,
-    flash: 0,
+    flash: 0, critFlash: 0, isCrit: false, critTimer: 0,
+    specialBuffer: 0,
   };
 }
 
 function startMove(f, name) {
   const m = MOVES[name];
+  if (!m) return;
   f.state = 'attack'; f.move = m; f.moveName = name;
   f.t = 0; f.hitDone = false; f.cast = false;
   // Total length of this move in frames; hand moves are slowed by the weapon
   f.total = m.startup + m.active + m.recovery + (HAND_MOVES.has(name) ? f.weapon.slow : 0);
-  if (m.cost) f.meter -= m.cost;
-  if (name === 'jump_kick') f.vx = f.facing * 4;
+  if (m.cost) f.meter = Math.max(0, f.meter - m.cost);
+  if (name === 'jump_kick') f.vx = f.facing * 5.5;
+  if (name === 'dive_punch') { f.vx = f.facing * 5; f.vy = 8; }
+  if (name === 'dash_strike') f.vx = f.facing * 7.5;
 }
 
 function endMove(f) {
@@ -38,33 +47,56 @@ function endMove(f) {
 
 function aiInput(f, opp) {
   const r = { left: false, right: false, up: false, down: false, block: false,
-              jab: false, kick: false, hook: false, special: false };
+              jab: false, kick: false, hook: false, heavy: false, special: false };
   const d = opp.x - f.x, dist = Math.abs(d);
   const fwd = d > 0 ? 'right' : 'left', back = d > 0 ? 'left' : 'right';
   f.aiCool = Math.max(0, f.aiCool - 1);
 
-  if (dist > 120) r[fwd] = true;
-  else if (dist < 70 && Math.random() < 0.3) r[back] = true;
+  // Aggressive relentless pursuit
+  if (dist > 95) {
+    r[fwd] = true;
+    if (dist > 180 && Math.random() < 0.05) r.up = true;
+  } else if (dist < 45 && Math.random() < 0.12) {
+    r[back] = true;
+  }
 
-  if (opp.state === 'attack' && dist < 140 && Math.random() < 0.5) f.aiBlock = 12;
+  // Fast tactical reaction block
+  if (opp.state === 'attack' && dist < 125 && Math.random() < 0.45) {
+    f.aiBlock = 8;
+  }
   if (f.aiBlock > 0) { r.block = true; f.aiBlock--; }
 
-  // Use the special as soon as the bar is full and the opponent is in range of a throw
-  if (f.meter >= SPECIAL_COST && f.state !== 'attack' && f.aiCool === 0 && Math.random() < 0.04) {
-    r.special = true; f.aiCool = 40;
+  // Fire special as soon as short meter (40) is filled!
+  if (f.meter >= SPECIAL_COST && f.state !== 'attack' && f.aiCool === 0 && Math.random() < 0.25) {
+    r.special = true; f.aiCool = 16;
   }
 
-  if (dist < 120 && f.aiCool === 0 && f.state !== 'attack' && Math.random() < 0.05) {
-    f.aiCool = 30;
-    const roll = Math.random();
-    if (roll < 0.35) r.jab = true;
-    else if (roll < 0.55) r.hook = true;
-    else if (roll < 0.75) r.kick = true;
-    else if (roll < 0.85) { r.down = true; r.jab = true; }   // uppercut
-    else { r.down = true; r.kick = true; }                   // sweep
+  // Aggressive combat attack selection
+  if (f.aiCool === 0 && f.state !== 'attack') {
+    if (dist < 80 && Math.random() < 0.26) {
+      f.aiCool = 10;
+      const roll = Math.random();
+      if (roll < 0.22) r.jab = true;                           // lightning jab
+      else if (roll < 0.42) r.hook = true;                      // hook
+      else if (roll < 0.58) r.kick = true;                      // kick
+      else if (roll < 0.72) { r.down = true; r.jab = true; }    // uppercut
+      else if (roll < 0.86) { r.down = true; r.hook = true; }   // heavy smash!
+      else { r.down = true; r.kick = true; }                    // low sweep
+    } else if (dist >= 80 && dist < 170 && Math.random() < 0.22) {
+      f.aiCool = 12;
+      const roll = Math.random();
+      if (roll < 0.50) { r[fwd] = true; r.hook = true; }         // forward dash strike!
+      else if (roll < 0.78) r.kick = true;                      // long kick
+      else { r.up = true; r.kick = true; }                      // jumping flying kick!
+    }
   }
-  if (f.y < GROUND - 2 && Math.random() < 0.1) r.kick = true; // flying kick
-  if (Math.random() < 0.004) r.up = true;
+
+  // Mid-air attacks
+  if (f.y < GROUND - 2 && Math.random() < 0.28) {
+    if (Math.random() < 0.5) r.kick = true;                     // flying jump kick
+    else r.jab = true;                                          // dive punch
+  }
+
   return r;
 }
 
@@ -74,6 +106,12 @@ function updateFighter(f, opp) {
   f.facing = opp.x >= f.x ? 1 : -1;
   if (f.comboT > 0) f.comboT--; else f.combo = 0;
   if (f.flash > 0) f.flash--;
+  if (f.critFlash > 0) f.critFlash--;
+  if (f.critTimer > 0) f.critTimer--; else f.isCrit = false;
+
+  // Buffer special move input so tapping E even during an attack/stun will unleash it!
+  if (inp.special) f.specialBuffer = 20;
+  if (f.specialBuffer > 0) f.specialBuffer--;
 
   if (f.stun > 0) {
     f.stun--; f.vx *= 0.85;
@@ -94,28 +132,47 @@ function updateFighter(f, opp) {
     if (grounded && inp.block) { f.state = 'block'; f.vx *= 0.3; }
     else {
       f.state = 'idle';
-      if (grounded) {
-        if (inp.up) f.vy = -14;
-        if (inp.special && f.meter >= SPECIAL_COST) startMove(f, 'special');
+      const wantSpecial = (inp.special || f.specialBuffer > 0) && f.meter >= SPECIAL_COST;
+      if (wantSpecial) {
+        startMove(f, 'special');
+        f.specialBuffer = 0;
+      } else if (grounded) {
+        if (inp.up) f.vy = -14.5;
+        else if (inp.heavy || (inp.down && inp.hook)) startMove(f, 'smash');
+        else if ((inp.left || inp.right) && inp.hook) startMove(f, 'dash_strike');
         else if (inp.jab && inp.down) startMove(f, 'uppercut');
         else if (inp.kick && inp.down) startMove(f, 'sweep');
         else if (inp.jab) startMove(f, 'jab');
         else if (inp.hook) startMove(f, 'hook');
         else if (inp.kick) startMove(f, 'kick');
-      } else if (inp.kick) {
-        startMove(f, 'jump_kick');
+      } else {
+        if (inp.kick) startMove(f, 'jump_kick');
+        else if (inp.jab || inp.heavy) startMove(f, 'dive_punch');
       }
     }
   }
 
-  f.vy += 0.8; f.y += f.vy;
+  f.vy += 0.85; f.y += f.vy;
   if (f.y >= GROUND) { f.y = GROUND; f.vy = 0; }
   f.x += f.vx;
   f.x = Math.max(40, Math.min(W - 40, f.x));
 }
 
-// Shared damage rules for melee and projectiles
-function landHit(a, d, dmg, stun, vx, airborne) {
+// Shared damage rules for melee and projectiles with Critical Hit system
+function landHit(a, d, dmg, stun, vx, airborne, isCrit = false, gs = null) {
+  if (isCrit) {
+    dmg = Math.round(dmg * 1.75);
+    stun = Math.round(stun * 1.4);
+    vx *= 1.45;
+    d.critFlash = 16;
+    a.isCrit = true;
+    a.critTimer = 45;
+    if (gs) {
+      gs.lastHitCrit = true;
+      gs.shake = 14;
+    }
+  }
+
   if (d.state === 'block' && !airborne) {
     dmg *= 0.25; d.stun = 8;
   } else {
@@ -124,11 +181,13 @@ function landHit(a, d, dmg, stun, vx, airborne) {
   d.hp = Math.max(0, d.hp - dmg);
   d.state = 'hit';
   d.flash = 10;
-  d.meter = Math.min(SPECIAL_COST, d.meter + dmg * 0.8);
-  a.meter = Math.min(SPECIAL_COST, a.meter + dmg * 1.5);
+  // Special meter increases when fighting: landing hits and criticals
+  const meterGain = isCrit ? 9 : 6;
+  d.meter = Math.min(SPECIAL_COST, d.meter + 3);
+  a.meter = Math.min(SPECIAL_COST, a.meter + meterGain);
 }
 
-function checkHits(a, d) {
+function checkHits(a, d, gs) {
   if (a.state !== 'attack' || a.hitDone) return;
   const m = a.move;
   if (m.cast) return;
@@ -145,10 +204,17 @@ function checkHits(a, d) {
 
   a.hitDone = true;
   a.combo = a.comboT > 0 ? a.combo + 1 : 1;
-  a.comboT = 40;
-  const comboMult = Math.min(1.5, 1 + 0.1 * (a.combo - 1));
+  a.comboT = 48;
+  const comboMult = Math.min(1.6, 1 + 0.12 * (a.combo - 1));
   const dmg = m.dmg * a.char.power * comboMult * w.dmg;
-  landHit(a, d, dmg, m.stun, a.facing * m.knock, airborne);
+
+  // Critical Hit Calculation:
+  // Base 15% + move bonus (up to 30%) + counter-hit bonus (25% if opponent is attacking!)
+  const isCounter = d.state === 'attack';
+  const critChance = 0.15 + (m.critBonus || 0) + (isCounter ? 0.25 : 0);
+  const isCrit = Math.random() < Math.min(0.70, critChance);
+
+  landHit(a, d, dmg, m.stun, a.facing * m.knock, airborne, isCrit, gs);
 }
 
 // When a special's cast frame arrives, release its projectile once
@@ -156,11 +222,11 @@ function spawnCasts(gs) {
   for (const [f, opp] of [[gs.p1, gs.p2], [gs.p2, gs.p1]]) {
     if (f.state === 'attack' && f.moveName === 'special' && !f.cast && f.t >= f.move.startup) {
       f.cast = true;
-      const k = PROJ[f.kind];
+      const k = PROJ[f.kind] || PROJ.blades;
       gs.proj.push({
         x: f.x + f.facing * 45, y: k.y, vx: f.facing * k.speed,
         dmg: k.dmg * f.char.power, life: k.life, w: k.w,
-        kind: f.kind, owner: f, target: opp,
+        kind: f.kind || 'blades', owner: f, target: opp,
       });
     }
   }
@@ -173,7 +239,8 @@ function updateProjectiles(gs) {
     const d = p.target;
     // Hit if the projectile's height is inside the target's body
     if (d.hp > 0 && Math.abs(p.x - d.x) < p.w / 2 + 22 && p.y <= d.y && p.y >= d.y - 130) {
-      landHit(p.owner, d, p.dmg, 16, p.owner.facing * 3, false);
+      const isCrit = Math.random() < 0.25;
+      landHit(p.owner, d, p.dmg, 16, p.owner.facing * 3.5, false, isCrit, gs);
       return false;
     }
     return p.life > 0 && p.x > -80 && p.x < W + 80;
@@ -182,10 +249,11 @@ function updateProjectiles(gs) {
 
 function resetFighters(gs) {
   [[gs.p1, 260, 1], [gs.p2, 700, -1]].forEach(([f, x, fc]) => {
-    f.x = x; f.y = GROUND; f.vx = 0; f.vy = 0; f.hp = 100; f.meter = 0;
+    f.x = x; f.y = GROUND; f.vx = 0; f.vy = 0; f.hp = MAX_HP; f.maxHp = MAX_HP; f.meter = 0;
     f.state = 'idle'; f.stun = 0; f.move = null; f.moveName = null;
     f.facing = fc; f.hitDone = false; f.t = 0; f.total = 0; f.cast = false;
-    f.combo = 0; f.comboT = 0; f.flash = 0;
+    f.combo = 0; f.comboT = 0; f.flash = 0; f.critFlash = 0; f.isCrit = false; f.critTimer = 0;
+    f.specialBuffer = 0;
   });
   gs.proj = [];
 }
@@ -199,6 +267,7 @@ export function createMatch(cfg) {
     p1, p2, proj: [], wins: [0, 0], round: 1,
     phase: 'intro', phaseT: 90, timeLeft: 3600,
     resultText: '', matchWinner: -1, done: false, endT: 0,
+    shake: 0, lastHitCrit: false,
   };
   p1.kind = cfg.p1Special || p1.kind;
   p2.kind = cfg.p2Special || p2.kind;
@@ -216,6 +285,8 @@ function endRound(gs, w, txt) {
 export function stepMatch(gs) {
   if (gs.done) return;
   const { p1, p2 } = gs;
+  if (gs.shake > 0) gs.shake--;
+  gs.lastHitCrit = false;
 
   if (gs.phase === 'intro') { if (--gs.phaseT <= 0) gs.phase = 'play'; return; }
 
@@ -223,7 +294,7 @@ export function stepMatch(gs) {
     gs.timeLeft--;
     updateFighter(p1, p2); updateFighter(p2, p1);
     spawnCasts(gs);
-    checkHits(p1, p2); checkHits(p2, p1);
+    checkHits(p1, p2, gs); checkHits(p2, p1, gs);
     updateProjectiles(gs);
     if (p1.hp <= 0 || p2.hp <= 0) {
       const w = (p1.hp <= 0 && p2.hp <= 0) ? -1 : (p1.hp <= 0 ? 1 : 0);
