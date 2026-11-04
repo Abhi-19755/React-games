@@ -3,10 +3,11 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import Fighter3D, { toWorldX } from './Fighter3D.jsx';
 import Projectiles3D from './Projectiles3D.jsx';
-import { createMatch, stepMatch } from '../game/logic.js';
-import { isPressed, endFrame } from '../game/input.js';
+import { createMatch, stepMatch, packGameState, unpackGameState } from '../game/logic.js';
+import { isPressed, endFrame, readInput } from '../game/input.js';
 import { matchSounds, stopMusic } from '../game/audio.js';
-import { CHARS, WEAPONS, ENVIRONMENTS } from '../game/data.js';
+import { CHARS, WEAPONS, ENVIRONMENTS, P1K } from '../game/data.js';
+import { getActiveSession } from '../game/multiplayer.js';
 
 const END_DELAY_FRAMES = 120;
 
@@ -409,19 +410,35 @@ function Stage({ env }) {
   );
 }
 
-// Runs the match each frame and drives the camera
-function GameLoop({ gsRef, spawnRef, onTick, onExit, onFinish }) {
+// Runs the match each frame, handles multiplayer streaming, and drives the camera
+function GameLoop({ gsRef, spawnRef, config, onTick, onExit, onFinish }) {
   const camera = useThree((s) => s.camera);
   const soundSnap = useRef(null);
 
   useFrame(() => {
     if (isPressed('Escape')) {
       endFrame();
+      if (isMulti) session?.send({ type: 'GOTO_SCREEN', screen: 'menu' });
       onExit();
       return;
     }
     const gs = gsRef.current;
-    stepMatch(gs);
+    const session = getActiveSession();
+    const isMulti = config.mode === 'multi';
+    const isGuest = isMulti && config.netRole === 'p2';
+
+    if (isGuest) {
+      // Guest reads local keyboard inputs and streams them to Host in real time
+      const myInput = readInput(P1K);
+      session?.send({ type: 'GUEST_INPUT', input: myInput });
+    } else {
+      // Host / Single Player runs authoritative match simulation
+      stepMatch(gs);
+      if (isMulti) {
+        session?.send({ type: 'MATCH_SYNC', state: packGameState(gs) });
+      }
+    }
+
     soundSnap.current = matchSounds(gs, soundSnap.current);
 
     const x1 = toWorldX(gs.p1.x), x2 = toWorldX(gs.p2.x), mid = (x1 + x2) / 2;
@@ -444,7 +461,12 @@ function GameLoop({ gsRef, spawnRef, onTick, onExit, onFinish }) {
     onTick(gs);
     endFrame();
 
-    if (gs.done && ++gs.endT > END_DELAY_FRAMES) onFinish(gs.matchWinner, gs.wins);
+    if (gs.done && ++gs.endT > END_DELAY_FRAMES) {
+      if (isMulti && !isGuest) {
+        session?.send({ type: 'MATCH_FINISH', winner: gs.matchWinner, wins: gs.wins });
+      }
+      onFinish(gs.matchWinner, gs.wins);
+    }
   });
 
   return null;
@@ -456,6 +478,28 @@ export default function Arena3D({ config, onTick, onExit, onFinish }) {
   const spawnRef = useRef(() => {});
   const registerSpawn = useRef((fn) => { spawnRef.current = fn; }).current;
   useEffect(() => () => stopMusic(), []);
+
+  // Listen for multiplayer state sync events during fight
+  useEffect(() => {
+    const session = getActiveSession();
+    if (!session || config.mode !== 'multi') return;
+
+    session.setMessageHandler((msg) => {
+      if (msg.type === 'GUEST_INPUT' && config.netRole === 'p1') {
+        if (gsRef.current && gsRef.current.p2) {
+          gsRef.current.p2.remoteInput = msg.input;
+        }
+      } else if (msg.type === 'MATCH_SYNC' && config.netRole === 'p2') {
+        if (gsRef.current) {
+          unpackGameState(gsRef.current, msg.state);
+        }
+      } else if (msg.type === 'MATCH_FINISH' && config.netRole === 'p2') {
+        onFinish(msg.winner, msg.wins);
+      } else if (msg.type === 'GOTO_SCREEN') {
+        onExit();
+      }
+    });
+  }, [config.mode, config.netRole, onFinish, onExit]);
 
   const env = ENVIRONMENTS.find((e) => e.id === config.env) || ENVIRONMENTS[0];
 
@@ -486,7 +530,7 @@ export default function Arena3D({ config, onTick, onExit, onFinish }) {
       <Projectiles3D gsRef={gsRef} />
       <SpecialCastEffect gsRef={gsRef} />
       <Sparks registerSpawn={registerSpawn} />
-      <GameLoop gsRef={gsRef} spawnRef={spawnRef} onTick={onTick} onExit={onExit} onFinish={onFinish} />
+      <GameLoop gsRef={gsRef} spawnRef={spawnRef} config={config} onTick={onTick} onExit={onExit} onFinish={onFinish} />
     </Canvas>
   );
 }

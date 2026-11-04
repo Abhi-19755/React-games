@@ -102,7 +102,7 @@ function aiInput(f, opp) {
 
 function updateFighter(f, opp) {
   const c = f.char, grounded = f.y >= GROUND;
-  const inp = f.isAI ? aiInput(f, opp) : readInput(f.keys);
+  const inp = f.remoteInput ? f.remoteInput : (f.isAI ? aiInput(f, opp) : readInput(f.keys));
   f.facing = opp.x >= f.x ? 1 : -1;
   if (f.comboT > 0) f.comboT--; else f.combo = 0;
   if (f.flash > 0) f.flash--;
@@ -315,4 +315,69 @@ export function stepMatch(gs) {
       gs.phase = 'intro'; gs.phaseT = 90;
     }
   }
+}
+
+// Serialize game state for real-time multiplayer network synchronization
+export function packGameState(gs) {
+  return {
+    p1: {
+      x: gs.p1.x, y: gs.p1.y, vx: gs.p1.vx, vy: gs.p1.vy,
+      hp: gs.p1.hp, meter: gs.p1.meter, state: gs.p1.state,
+      moveName: gs.p1.moveName, t: gs.p1.t, total: gs.p1.total, facing: gs.p1.facing,
+      flash: gs.p1.flash, critFlash: gs.p1.critFlash,
+      combo: gs.p1.combo, comboT: gs.p1.comboT,
+      isCrit: gs.p1.isCrit,
+    },
+    p2: {
+      x: gs.p2.x, y: gs.p2.y, vx: gs.p2.vx, vy: gs.p2.vy,
+      hp: gs.p2.hp, meter: gs.p2.meter, state: gs.p2.state,
+      moveName: gs.p2.moveName, t: gs.p2.t, total: gs.p2.total, facing: gs.p2.facing,
+      flash: gs.p2.flash, critFlash: gs.p2.critFlash,
+      combo: gs.p2.combo, comboT: gs.p2.comboT,
+      isCrit: gs.p2.isCrit,
+    },
+    proj: gs.proj.map((p) => ({ x: p.x, y: p.y, vx: p.vx, kind: p.kind })),
+    timeLeft: gs.timeLeft,
+    round: gs.round,
+    wins: gs.wins,
+    phase: gs.phase,
+    phaseT: gs.phaseT,
+    resultText: gs.resultText,
+    matchWinner: gs.matchWinner,
+    done: gs.done,
+    shake: gs.shake,
+  };
+}
+
+// Apply network synchronized game state on guest client
+export function unpackGameState(gs, data) {
+  if (!gs || !data) return;
+  if (data.p1) {
+    Object.assign(gs.p1, data.p1);
+    if (data.p1.moveName && MOVES[data.p1.moveName]) {
+      gs.p1.move = MOVES[data.p1.moveName];
+    } else if (!data.p1.moveName) {
+      gs.p1.move = null;
+    }
+  }
+  if (data.p2) {
+    Object.assign(gs.p2, data.p2);
+    if (data.p2.moveName && MOVES[data.p2.moveName]) {
+      gs.p2.move = MOVES[data.p2.moveName];
+    } else if (!data.p2.moveName) {
+      gs.p2.move = null;
+    }
+  }
+  if (data.proj) {
+    gs.proj = data.proj;
+  }
+  if (data.timeLeft !== undefined) gs.timeLeft = data.timeLeft;
+  if (data.round !== undefined) gs.round = data.round;
+  if (data.wins !== undefined) gs.wins = data.wins;
+  if (data.phase !== undefined) gs.phase = data.phase;
+  if (data.phaseT !== undefined) gs.phaseT = data.phaseT;
+  if (data.resultText !== undefined) gs.resultText = data.resultText;
+  if (data.matchWinner !== undefined) gs.matchWinner = data.matchWinner;
+  if (data.done !== undefined) gs.done = data.done;
+  if (data.shake !== undefined) gs.shake = data.shake;
 }

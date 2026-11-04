@@ -40,8 +40,14 @@ export default function FightScreen({ config, onExit, onFinish }) {
     const p2Full = gs.p2.meter >= SPECIAL_COST;
     e.p1Mp.parentNode.classList.toggle('full', p1Full);
     e.p2Mp.parentNode.classList.toggle('full', p2Full);
-    e.p1Ready.textContent = p1Full ? '⚡ SPECIAL READY · PRESS E' : '';
-    e.p2Ready.textContent = p2Full ? '⚡ SPECIAL READY · NUM 5' : '';
+    const isP2 = config.netRole === 'p2';
+    if (isP2) {
+      e.p1Ready.textContent = p1Full ? '⚡ OPPONENT SPECIAL READY' : '';
+      e.p2Ready.textContent = p2Full ? '⚡ SPECIAL READY · PRESS E' : '';
+    } else {
+      e.p1Ready.textContent = p1Full ? '⚡ SPECIAL READY · PRESS E' : '';
+      e.p2Ready.textContent = p2Full ? (config.mode === 'single' ? '⚡ CPU SPECIAL READY' : '⚡ OPPONENT SPECIAL READY') : '';
+    }
 
     e.timer.textContent = String(Math.max(0, Math.ceil(gs.timeLeft / 60)));
     e.round.textContent = `ROUND ${gs.round}`;
