@@ -1,21 +1,24 @@
-import { CHARS, WEAPONS, MOVES, HAND_MOVES, P1K, P2K, GROUND, W, SPECIAL_COST, PROJ_CONFIG, SPECIALS, ENVIRONMENTS } from './data.js';
+import { CHARS, WEAPONS, MOVES, HAND_MOVES, P1K, P2K, GROUND, W, SPECIAL_COST } from './data.js';
 import { readInput } from './input.js';
 
 const NO_WEAPON = WEAPONS[0];
 
-export function makeFighter(char, specialId, x, facing, isAI, keys, label, weapon = NO_WEAPON) {
-  const special = SPECIALS.find(s => s.id === specialId) || SPECIALS[0];
+// Special projectiles: speed (px/frame), damage, lifetime, screen height, hit width
+export const PROJ = {
+  blades: { speed: 12,  dmg: 16, life: 70,  y: GROUND - 100, w: 40 },
+  fire:   { speed: 8,   dmg: 20, life: 100, y: GROUND - 70,  w: 36 },
+  water:  { speed: 6.5, dmg: 14, life: 130, y: GROUND - 40,  w: 70 },
+};
+
+export function makeFighter(char, x, facing, isAI, keys, label, weapon = NO_WEAPON) {
   return {
-    char, specialId, special, label, isAI, keys, weapon,
-    kind: special.projectile,                 // which special power this fighter has
+    char, label, isAI, keys, weapon,
+    kind: char.special,                 // which special power this fighter has
     x, facing, y: GROUND, vx: 0, vy: 0,
     hp: 100, meter: 0, state: 'idle', stun: 0,
     t: 0, total: 0, move: null, moveName: null, hitDone: false, cast: false,
     combo: 0, comboT: 0, aiCool: 0, aiBlock: 0,
     flash: 0,
-    invuln: 0,                  // roll invincibility frames
-    rolling: false,             // currently rolling
-    rollDir: 0,                 // roll direction
   };
 }
 
@@ -27,24 +30,15 @@ function startMove(f, name) {
   f.total = m.startup + m.active + m.recovery + (HAND_MOVES.has(name) ? f.weapon.slow : 0);
   if (m.cost) f.meter -= m.cost;
   if (name === 'jump_kick') f.vx = f.facing * 4;
-  if (name === 'roll') {
-    f.rolling = true;
-    f.rollDir = f.facing;
-    f.invuln = m.invuln || 0;
-    f.vx = f.facing * 10; // fast roll speed
-  }
 }
 
 function endMove(f) {
   f.state = 'idle'; f.move = null; f.moveName = null;
-  f.rolling = false;
-  f.rollDir = 0;
-  f.invuln = 0;
 }
 
 function aiInput(f, opp) {
   const r = { left: false, right: false, up: false, down: false, block: false,
-              jab: false, kick: false, hook: false, special: false, roll: false };
+              jab: false, kick: false, hook: false, special: false };
   const d = opp.x - f.x, dist = Math.abs(d);
   const fwd = d > 0 ? 'right' : 'left', back = d > 0 ? 'left' : 'right';
   f.aiCool = Math.max(0, f.aiCool - 1);
@@ -60,18 +54,13 @@ function aiInput(f, opp) {
     r.special = true; f.aiCool = 40;
   }
 
-  // AI can roll to dodge
-  if (f.state !== 'attack' && f.aiCool === 0 && dist < 100 && Math.random() < 0.02) {
-    r.roll = true; f.aiCool = 30;
-  }
-
   if (dist < 120 && f.aiCool === 0 && f.state !== 'attack' && Math.random() < 0.05) {
     f.aiCool = 30;
     const roll = Math.random();
-    if (roll < 0.3) r.jab = true;
-    else if (roll < 0.48) r.hook = true;
-    else if (roll < 0.66) r.kick = true;
-    else if (roll < 0.78) { r.down = true; r.jab = true; }   // uppercut
+    if (roll < 0.35) r.jab = true;
+    else if (roll < 0.55) r.hook = true;
+    else if (roll < 0.75) r.kick = true;
+    else if (roll < 0.85) { r.down = true; r.jab = true; }   // uppercut
     else { r.down = true; r.kick = true; }                   // sweep
   }
   if (f.y < GROUND - 2 && Math.random() < 0.1) r.kick = true; // flying kick
@@ -85,7 +74,6 @@ function updateFighter(f, opp) {
   f.facing = opp.x >= f.x ? 1 : -1;
   if (f.comboT > 0) f.comboT--; else f.combo = 0;
   if (f.flash > 0) f.flash--;
-  if (f.invuln > 0) f.invuln--;
 
   if (f.stun > 0) {
     f.stun--; f.vx *= 0.85;
@@ -94,12 +82,6 @@ function updateFighter(f, opp) {
     const m = f.move; f.t++;
     if (m.air) {
       if ((grounded && f.t > m.startup) || f.t >= m.startup + m.active + m.recovery) endMove(f);
-    } else if (m.evade) {
-      // Roll: maintain velocity during active frames
-      if (f.t >= m.startup && f.t < m.startup + m.active) {
-        f.vx = f.rollDir * 10;
-      }
-      if (f.t >= f.total) endMove(f);
     } else {
       const lunging = m.lunge && f.t >= m.startup && f.t < m.startup + m.active;
       f.vx = lunging ? f.facing * m.lunge : 0;
@@ -115,7 +97,6 @@ function updateFighter(f, opp) {
       if (grounded) {
         if (inp.up) f.vy = -14;
         if (inp.special && f.meter >= SPECIAL_COST) startMove(f, 'special');
-        else if (inp.roll) startMove(f, 'roll');
         else if (inp.jab && inp.down) startMove(f, 'uppercut');
         else if (inp.kick && inp.down) startMove(f, 'sweep');
         else if (inp.jab) startMove(f, 'jab');
@@ -135,7 +116,6 @@ function updateFighter(f, opp) {
 
 // Shared damage rules for melee and projectiles
 function landHit(a, d, dmg, stun, vx, airborne) {
-  if (d.invuln > 0) return false; // Invincible during roll
   if (d.state === 'block' && !airborne) {
     dmg *= 0.25; d.stun = 8;
   } else {
@@ -146,14 +126,12 @@ function landHit(a, d, dmg, stun, vx, airborne) {
   d.flash = 10;
   d.meter = Math.min(SPECIAL_COST, d.meter + dmg * 0.8);
   a.meter = Math.min(SPECIAL_COST, a.meter + dmg * 1.5);
-  return true;
 }
 
 function checkHits(a, d) {
   if (a.state !== 'attack' || a.hitDone) return;
   const m = a.move;
   if (m.cast) return;
-  if (m.evade) return; // Roll doesn't hit
   if (a.t < m.startup || a.t >= m.startup + m.active) return;
 
   const w = HAND_MOVES.has(a.moveName) ? a.weapon : NO_WEAPON;
@@ -178,17 +156,12 @@ function spawnCasts(gs) {
   for (const [f, opp] of [[gs.p1, gs.p2], [gs.p2, gs.p1]]) {
     if (f.state === 'attack' && f.moveName === 'special' && !f.cast && f.t >= f.move.startup) {
       f.cast = true;
-      const k = PROJ_CONFIG[f.kind];
-      // Multiple projectiles for some specials
-      for (let i = 0; i < (k.count || 1); i++) {
-        const offset = k.count > 1 ? (i - (k.count - 1) / 2) * 15 : 0;
-        gs.proj.push({
-          x: f.x + f.facing * 45, y: k.y + offset, vx: f.facing * k.speed,
-          dmg: k.dmg * f.char.power, life: k.life, w: k.w,
-          kind: f.kind, owner: f, target: opp,
-          config: k,
-        });
-      }
+      const k = PROJ[f.kind];
+      gs.proj.push({
+        x: f.x + f.facing * 45, y: k.y, vx: f.facing * k.speed,
+        dmg: k.dmg * f.char.power, life: k.life, w: k.w,
+        kind: f.kind, owner: f, target: opp,
+      });
     }
   }
 }
@@ -213,23 +186,22 @@ function resetFighters(gs) {
     f.state = 'idle'; f.stun = 0; f.move = null; f.moveName = null;
     f.facing = fc; f.hitDone = false; f.t = 0; f.total = 0; f.cast = false;
     f.combo = 0; f.comboT = 0; f.flash = 0;
-    f.invuln = 0; f.rolling = false; f.rollDir = 0;
   });
   gs.proj = [];
 }
 
-// cfg: { mode, p1Char, p1Weapon, p2Char, p2Weapon, p1Special, p2Special, env }
+// cfg: { mode, p1Char, p1Weapon, p2Char, p2Weapon }
 export function createMatch(cfg) {
   const single = cfg.mode === 'single';
-  const p1 = makeFighter(CHARS[cfg.p1Char], cfg.p1Special, 260, 1, false, P1K, 'P1', WEAPONS[cfg.p1Weapon]);
-  const p2 = makeFighter(CHARS[cfg.p2Char], cfg.p2Special, 700, -1, single, P2K, single ? 'CPU' : 'P2', WEAPONS[cfg.p2Weapon]);
-  const env = ENVIRONMENTS.find(e => e.id === cfg.env) || ENVIRONMENTS[0];
+  const p1 = makeFighter(CHARS[cfg.p1Char], 260, 1, false, P1K, 'P1', WEAPONS[cfg.p1Weapon]);
+  const p2 = makeFighter(CHARS[cfg.p2Char], 700, -1, single, P2K, single ? 'CPU' : 'P2', WEAPONS[cfg.p2Weapon]);
   const gs = {
     p1, p2, proj: [], wins: [0, 0], round: 1,
     phase: 'intro', phaseT: 90, timeLeft: 3600,
     resultText: '', matchWinner: -1, done: false, endT: 0,
-    env,
   };
+  p1.kind = cfg.p1Special || p1.kind;
+  p2.kind = cfg.p2Special || p2.kind;
   resetFighters(gs);
   return gs;
 }

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import Arena3D from './3d/Arena3D.jsx';
-import { CHARS, WEAPONS, SPECIAL_COST, SPECIALS } from './game/data.js';
+import { CHARS, WEAPONS, SPECIAL_COST, SPECIAL_NAMES } from './game/data.js';
 
 // Text shown across the middle of the screen
 function bannerFor(gs) {
@@ -66,7 +66,7 @@ export default function FightScreen({ config, onExit, onFinish }) {
             <div className="mp"><div ref={ref('p1Mp')} /></div>
             <div className="ready" ref={ref('p1Ready')} />
             <div className="name">P1 · {p1Name}</div>
-            <div className="power">{SPECIALS[0].name}</div>
+            <div className="power">{SPECIAL_NAMES[config.p1Special]}</div>
             <div className="combo" ref={ref('combo1')} />
           </div>
 
@@ -81,7 +81,7 @@ export default function FightScreen({ config, onExit, onFinish }) {
             <div className="mp"><div ref={ref('p2Mp')} /></div>
             <div className="ready" ref={ref('p2Ready')} />
             <div className="name">{p2Name}</div>
-            <div className="power">{SPECIALS[0].name}</div>
+            <div className="power">{SPECIAL_NAMES[config.p2Special]}</div>
             <div className="combo" ref={ref('combo2')} />
           </div>
         </div>
@@ -89,7 +89,7 @@ export default function FightScreen({ config, onExit, onFinish }) {
         {banner && <div className="banner" key={banner}>{banner}</div>}
 
         <div className="controls-hint">
-          P1: A D move · W jump · J jab · U hook · K kick · S+J uppercut · S+K sweep · jump+K flying kick · L block · E special (when bar is full) · Q roll · Esc quit
+          P1: A D move · W jump · J jab · U hook · K kick · S+J uppercut · S+K sweep · jump+K flying kick · L block · E special (when bar is full) · Esc quit
         </div>
       </div>
     </div>

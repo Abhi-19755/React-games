@@ -65,19 +65,19 @@ function keyStep(u) {
     let r = u;
     const multi = u.mode === 'multi';
     if (!u.p1Lock) {
-      if (isPressed('KeyA')) r = { ...r, p1Idx: (r.p1Idx + 2) % 3 };
-      if (isPressed('KeyD')) r = { ...r, p1Idx: (r.p1Idx + 1) % 3 };
+      if (isPressed('KeyA')) r = { ...r, p1Idx: (r.p1Idx + CHARS.length - 1) % CHARS.length };
+      if (isPressed('KeyD')) r = { ...r, p1Idx: (r.p1Idx + 1) % CHARS.length };
       if (isPressed('KeyJ')) r = { ...r, p1Lock: true };
     }
     if (multi && !u.p2Lock) {
-      if (isPressed('ArrowLeft')) r = { ...r, p2Idx: (r.p2Idx + 2) % 3 };
-      if (isPressed('ArrowRight')) r = { ...r, p2Idx: (r.p2Idx + 1) % 3 };
+      if (isPressed('ArrowLeft')) r = { ...r, p2Idx: (r.p2Idx + CHARS.length - 1) % CHARS.length };
+      if (isPressed('ArrowRight')) r = { ...r, p2Idx: (r.p2Idx + 1) % CHARS.length };
       if (isPressed('Numpad1')) r = { ...r, p2Lock: true };
     }
     if (isPressed('Escape')) return { ...u, screen: selectBack(u), sel: 0 };
     const ready = multi ? (r.p1Lock && r.p2Lock) : r.p1Lock;
     if (ready && (isPressed('Enter') || isPressed('Space'))) {
-      return startFight(r);
+      return { ...r, screen: 'weapon', p1WLock: false, p2WLock: false, sel: 0 };
     }
   }
 
@@ -104,14 +104,16 @@ function keyStep(u) {
   if (u.screen === 'special') {
     let r = u;
     const multi = u.mode === 'multi', n = SPECIALS.length;
+    const p1Idx = SPECIALS.findIndex(s => s.id === r.p1Special);
+    const p2Idx = SPECIALS.findIndex(s => s.id === r.p2Special);
     if (!u.p1SpecialLock) {
-      if (isPressed('KeyA')) r = { ...r, p1Special: SPECIALS[(r.p1SpecialIdx + n - 1) % n].id };
-      if (isPressed('KeyD')) r = { ...r, p1Special: SPECIALS[(r.p1SpecialIdx + 1) % n].id };
+      if (isPressed('KeyA')) r = { ...r, p1Special: SPECIALS[(p1Idx + n - 1) % n].id };
+      if (isPressed('KeyD')) r = { ...r, p1Special: SPECIALS[(p1Idx + 1) % n].id };
       if (isPressed('KeyJ')) r = { ...r, p1SpecialLock: true };
     }
     if (multi && !u.p2SpecialLock) {
-      if (isPressed('ArrowLeft')) r = { ...r, p2Special: SPECIALS[(r.p2SpecialIdx + n - 1) % n].id };
-      if (isPressed('ArrowRight')) r = { ...r, p2Special: SPECIALS[(r.p2SpecialIdx + 1) % n].id };
+      if (isPressed('ArrowLeft')) r = { ...r, p2Special: SPECIALS[(p2Idx + n - 1) % n].id };
+      if (isPressed('ArrowRight')) r = { ...r, p2Special: SPECIALS[(p2Idx + 1) % n].id };
       if (isPressed('Numpad1')) r = { ...r, p2SpecialLock: true };
     }
     if (isPressed('Escape')) return { ...u, screen: 'weapon', sel: 0 };
@@ -125,9 +127,10 @@ function keyStep(u) {
   if (u.screen === 'env') {
     let r = u;
     const n = ENVIRONMENTS.length;
+    const envIdx = ENVIRONMENTS.findIndex(e => e.id === r.env);
     if (!u.envLock) {
-      if (isPressed('KeyA') || isPressed('ArrowLeft')) r = { ...r, env: ENVIRONMENTS[(r.envIdx + n - 1) % n].id };
-      if (isPressed('KeyD') || isPressed('ArrowRight')) r = { ...r, env: ENVIRONMENTS[(r.envIdx + 1) % n].id };
+      if (isPressed('KeyA') || isPressed('ArrowLeft')) r = { ...r, env: ENVIRONMENTS[(envIdx + n - 1) % n].id };
+      if (isPressed('KeyD') || isPressed('ArrowRight')) r = { ...r, env: ENVIRONMENTS[(envIdx + 1) % n].id };
       if (isPressed('KeyJ') || isPressed('Enter') || isPressed('Space')) r = { ...r, envLock: true };
     }
     if (isPressed('Escape')) return { ...u, screen: 'special', sel: 0 };

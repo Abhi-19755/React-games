@@ -11,6 +11,14 @@ const STEEL = '#dfe7ef';
 const WOOD = '#9a6a3a';
 const GOLD = '#c9a13b';
 
+// Shared mesh helper used by both createRig and buildWeapon
+const mesh = (geo, m, x = 0, y = 0, z = 0) => {
+  const o = new THREE.Mesh(geo, m);
+  o.position.set(x, y, z);
+  o.castShadow = true;
+  return o;
+};
+
 export function createRig(char, weaponDef) {
   const mats = [];
   const mat = (color, rough = 0.7, metal = 0.0) => {
@@ -32,13 +40,6 @@ export function createRig(char, weaponDef) {
   const blush = new THREE.MeshBasicMaterial({ color: '#ff7a84', transparent: true, opacity: 0.55 });
   const mouth = new THREE.MeshBasicMaterial({ color: '#7a2a2a' });
   const white = new THREE.MeshBasicMaterial({ color: '#ffffff' });
-
-  const mesh = (geo, m, x = 0, y = 0, z = 0) => {
-    const o = new THREE.Mesh(geo, m);
-    o.position.set(x, y, z);
-    o.castShadow = true;
-    return o;
-  };
 
   const root = new THREE.Group();
   const shadow = new THREE.Mesh(
